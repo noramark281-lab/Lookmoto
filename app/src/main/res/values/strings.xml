@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">BTC Signal Pro</string>
+    <string name="btc_usdt">BTC / USDT</string>
+    <string name="real_time_signals">Probabilistic Signals</string>
+    <string name="timeframe_1m">1m</string>
+    <string name="timeframe_5m">5m</string>
+    <string name="timeframe_30m">30m</string>
+    <string name="bullish">BULLISH</string>
+    <string name="bearish">BEARISH</string>
+    <string name="neutral">NEUTRAL</string>
+    <string name="strong_buy">STRONG BUY</string>
+    <string name="strong_sell">STRONG SELL</string>
+    <string name="binance_source">Binance Spot</string>
+    <string name="mexc_source">MEXC Spot</string>
+    <string name="order_book">Order Book</string>
+    <string name="recent_trades">Live Trades</string>
+    <string name="technical_indicators">Indicators</string>
+    <string name="risk_management">Risk Matrix</string>
+</resources>

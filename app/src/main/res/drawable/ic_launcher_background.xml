@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Base dark background with gradient -->
+    <path
+        android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108"
+                android:type="linear">
+                <item android:color="#0B0E14" android:offset="0.0" />
+                <item android:color="#161E2E" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Subtle circular glow in center -->
+    <path
+        android:pathData="M54,54m-45,0a45,45 0 1,1 90,0a45,45 0 1,1 -90,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="9"
+                android:endX="54"
+                android:endY="99"
+                android:type="linear">
+                <item android:color="#250ECB81" android:offset="0.0" />
+                <item android:color="#0500D8F6" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Minimal grid lines -->
+    <path
+        android:pathData="M18,36L90,36 M18,54L90,54 M18,72L90,72 M36,18L36,90 M54,18L54,90 M72,18L72,90"
+        android:strokeWidth="0.75"
+        android:strokeColor="#15FFFFFF" />
+</vector>
