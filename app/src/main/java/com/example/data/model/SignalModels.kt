@@ -37,28 +37,32 @@ data class TechnicalIndicators(
         get() = (ema9 != null && ema21 != null && ema50 != null) && (ema9 < ema21 && ema21 < ema50)
 }
 
-enum class SignalType(val title: String, val isBullish: Boolean, val scoreRange: IntRange) {
-    STRONG_BUY("STRONG BUY", true, 80..100),
-    BUY("BUY", true, 60..79),
-    NEUTRAL("NEUTRAL", true, 41..59),
-    SELL("SELL", false, 21..40),
-    STRONG_SELL("STRONG SELL", false, 0..20)
+enum class SignalType(
+    val titleArabic: String,
+    val isBullish: Boolean,
+    val scoreRange: IntRange
+) {
+    STRONG_BUY("شراء قوي جداً 🚀", true, 80..100),
+    BUY("شراء صاعد 📈", true, 60..79),
+    NEUTRAL("حركة عرضية / محايد ⚖️", true, 41..59),
+    SELL("بيع هابط 📉", false, 21..40),
+    STRONG_SELL("بيع قوي جداً 💥", false, 0..20)
 }
 
-enum class TrendDirection(val label: String) {
-    STRONG_UPTREND("Strong Uptrend"),
-    UPTREND("Uptrend"),
-    SIDEWAYS("Consolidation"),
-    DOWNTREND("Downtrend"),
-    STRONG_DOWNTREND("Strong Downtrend")
+enum class TrendDirection(val labelArabic: String) {
+    STRONG_UPTREND("اتجاه صاعد قوي 🚀"),
+    UPTREND("اتجاه صاعد 📈"),
+    SIDEWAYS("تذبذب وتجميع عرضي ↔️"),
+    DOWNTREND("اتجاه هابط 📉"),
+    STRONG_DOWNTREND("اتجاه هابط عنيف 💥")
 }
 
-enum class MomentumState(val label: String) {
-    OVERBOUGHT("Overbought (>70)"),
-    BULLISH_MOMENTUM("Bullish Momentum"),
-    BALANCED("Neutral Zone"),
-    BEARISH_MOMENTUM("Bearish Momentum"),
-    OVERSOLD("Oversold (<30)")
+enum class MomentumState(val labelArabic: String) {
+    OVERBOUGHT("تشبع شرائي (>70) احتمال تصحيح مؤقت"),
+    BULLISH_MOMENTUM("زخم شرائي تصاعدي قوي"),
+    BALANCED("منطقة توازن واستقرار"),
+    BEARISH_MOMENTUM("زخم بيعي تنازلي"),
+    OVERSOLD("تشبع بيعي (<30) ارتداد صاعد وشيك")
 }
 
 data class RiskManagementLevels(
@@ -78,6 +82,22 @@ data class RiskManagementLevels(
     val atr: Double
 )
 
+data class TimeframePrediction(
+    val timeframe: Timeframe,
+    val expectedDirectionArabic: String, // "صعود متوقع 📈" أو "هبوط متوقع 📉"
+    val isBullish: Boolean,
+    val riseProbability: Int, // e.g. 76%
+    val fallProbability: Int, // e.g. 24%
+    val currentPrice: Double,
+    val targetPrice: Double,
+    val stopLoss: Double,
+    val expectedPriceRangeLow: Double,
+    val expectedPriceRangeHigh: Double,
+    val confidenceArabic: String, // "مرتفعة جداً (92%)"
+    val technicalSummaryArabic: String,
+    val keyIndicatorsArabic: List<String>
+)
+
 data class SignalScore(
     val probabilityBullish: Int,
     val probabilityBearish: Int,
@@ -93,6 +113,8 @@ data class SignalScore(
 
 data class MultiTimeframeSignals(
     val signalsByTimeframe: Map<Timeframe, SignalScore> = emptyMap(),
+    val predictionsByTimeframe: Map<Timeframe, TimeframePrediction> = emptyMap(),
     val overallBullishProbability: Int = 50,
-    val overallSignalType: SignalType = SignalType.NEUTRAL
+    val overallSignalType: SignalType = SignalType.NEUTRAL,
+    val overallSentimentArabic: String = "تحليل متزن متعدد الأطر والمصادر"
 )

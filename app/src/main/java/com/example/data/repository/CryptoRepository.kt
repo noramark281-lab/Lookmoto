@@ -4,7 +4,9 @@ import com.example.data.engine.IndicatorEngine
 import com.example.data.model.AggTrade
 import com.example.data.model.Candle
 import com.example.data.model.ConnectionStatus
+import com.example.data.model.CryptoNewsItem
 import com.example.data.model.ExchangeSource
+import com.example.data.model.MarketSentiment
 import com.example.data.model.MultiTimeframeSignals
 import com.example.data.model.OrderBookData
 import com.example.data.model.SignalScore
@@ -12,14 +14,17 @@ import com.example.data.model.SignalType
 import com.example.data.model.TechnicalIndicators
 import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
+import com.example.data.model.TimeframePrediction
 import com.example.data.network.CryptoRestClient
 import com.example.data.network.CryptoWebSocketClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
@@ -45,6 +50,13 @@ class CryptoRepository(
     private val _recentTrades = MutableStateFlow<List<AggTrade>>(emptyList())
     val recentTrades: StateFlow<List<AggTrade>> = _recentTrades.asStateFlow()
 
+    // News and Market Sentiment
+    private val _marketSentiment = MutableStateFlow(MarketSentiment())
+    val marketSentiment: StateFlow<MarketSentiment> = _marketSentiment.asStateFlow()
+
+    private val _newsFeed = MutableStateFlow<List<CryptoNewsItem>>(emptyList())
+    val newsFeed: StateFlow<List<CryptoNewsItem>> = _newsFeed.asStateFlow()
+
     // Multi-timeframe Candles map
     private val candlesMap = mutableMapOf<Timeframe, MutableList<Candle>>()
     private val _candlesFlow = MutableStateFlow<Map<Timeframe, List<Candle>>>(emptyMap())
@@ -54,7 +66,7 @@ class CryptoRepository(
     private val _indicatorsFlow = MutableStateFlow<Map<Timeframe, TechnicalIndicators>>(emptyMap())
     val indicatorsFlow: StateFlow<Map<Timeframe, TechnicalIndicators>> = _indicatorsFlow.asStateFlow()
 
-    // Multi-timeframe Signals
+    // Multi-timeframe Signals & Predictions
     private val _multiTimeframeSignals = MutableStateFlow(MultiTimeframeSignals())
     val multiTimeframeSignals: StateFlow<MultiTimeframeSignals> = _multiTimeframeSignals.asStateFlow()
 
@@ -87,13 +99,21 @@ class CryptoRepository(
                 updateFormingCandle(newTrade.price, newTrade.time, newTrade.quantity)
             }
         }
+
+        // Periodic background news and sentiment refresh (every 3 minutes)
+        scope.launch {
+            while (isActive) {
+                refreshNewsAndSentiment()
+                delay(180_000L)
+            }
+        }
     }
 
     suspend fun initialize(exchange: ExchangeSource = ExchangeSource.BINANCE) {
         _isLoading.value = true
         _activeExchange.value = exchange
 
-        // 1. Fetch historical OHLCV candles for 1m, 5m, 30m
+        // 1. Fetch historical OHLCV candles for all timeframes
         Timeframe.values().forEach { tf ->
             val result = restClient.fetchHistoricalKlines(exchange, tf, limit = 100)
             result.onSuccess { list ->
@@ -103,12 +123,27 @@ class CryptoRepository(
             }
         }
 
-        // 2. Initial calculation of all indicators and signals
+        // 2. Fetch News and Sentiment
+        refreshNewsAndSentiment()
+
+        // 3. Initial calculation of all indicators and signals
         recalculateAllIndicators()
         _isLoading.value = false
 
-        // 3. Connect real-time WebSocket
+        // 4. Connect real-time WebSocket
         webSocketClient.connect(exchange)
+    }
+
+    private suspend fun refreshNewsAndSentiment() {
+        val sentimentResult = restClient.fetchMarketSentiment()
+        sentimentResult.onSuccess { sentiment ->
+            _marketSentiment.value = sentiment
+        }
+
+        val newsResult = restClient.fetchCryptoNews()
+        newsResult.onSuccess { news ->
+            _newsFeed.value = news
+        }
     }
 
     fun switchExchange(exchange: ExchangeSource) {
@@ -130,6 +165,7 @@ class CryptoRepository(
                     }
                 }
             }
+            refreshNewsAndSentiment()
             recalculateAllIndicators()
             _isLoading.value = false
         }
@@ -148,7 +184,6 @@ class CryptoRepository(
                 val candleEnd = lastCandle.openTime + tf.durationMs
 
                 if (timestamp < candleEnd) {
-                    // Update current in-progress candle
                     val updated = lastCandle.copy(
                         high = max(lastCandle.high, price),
                         low = min(lastCandle.low, price),
@@ -158,7 +193,6 @@ class CryptoRepository(
                     list[list.lastIndex] = updated
                     anyChanged = true
                 } else {
-                    // Start new candle
                     val newCandle = Candle(
                         openTime = candleEnd,
                         open = lastCandle.close,
@@ -190,11 +224,14 @@ class CryptoRepository(
 
         val newIndicators = mutableMapOf<Timeframe, TechnicalIndicators>()
         val newSignals = mutableMapOf<Timeframe, SignalScore>()
+        val currentBook = _orderBook.value
+        val currentSentiment = _marketSentiment.value
+        val currentPrice = _ticker.value.price.takeIf { it > 0 } ?: snapshot[Timeframe.FIVE_MIN]?.lastOrNull()?.close ?: 65000.0
 
         Timeframe.values().forEach { tf ->
             val candles = snapshot[tf] ?: emptyList()
             val indicators = IndicatorEngine.calculateIndicators(candles)
-            val signal = IndicatorEngine.evaluateSignal(tf, candles, indicators)
+            val signal = IndicatorEngine.evaluateSignal(tf, candles, indicators, currentBook, currentSentiment)
 
             newIndicators[tf] = indicators
             newSignals[tf] = signal
@@ -202,13 +239,31 @@ class CryptoRepository(
 
         _indicatorsFlow.value = newIndicators
 
-        // Multi-timeframe consensus:
-        // 1m weight: 20%, 5m weight: 35%, 30m weight: 45%
+        // Comprehensive multi-timeframe predictions
+        val predictions = IndicatorEngine.generateMultiTimeframePredictions(
+            currentPrice = currentPrice,
+            candlesMap = snapshot,
+            indicatorsMap = newIndicators,
+            orderBook = currentBook,
+            marketSentiment = currentSentiment
+        )
+
+        // Weighted consensus:
+        // 1m: 10%, 5m: 20%, 10m: 15%, 15m: 20%, 30m: 20%, 1h: 15%
         val score1m = newSignals[Timeframe.ONE_MIN]?.probabilityBullish ?: 50
         val score5m = newSignals[Timeframe.FIVE_MIN]?.probabilityBullish ?: 50
+        val score15m = newSignals[Timeframe.FIFTEEN_MIN]?.probabilityBullish ?: 50
         val score30m = newSignals[Timeframe.THIRTY_MIN]?.probabilityBullish ?: 50
+        val score1h = newSignals[Timeframe.ONE_HOUR]?.probabilityBullish ?: 50
 
-        val weightedBullish = ((score1m * 0.20) + (score5m * 0.35) + (score30m * 0.45)).roundToInt()
+        val weightedBullish = (
+            (score1m * 0.15) +
+            (score5m * 0.25) +
+            (score15m * 0.25) +
+            (score30m * 0.20) +
+            (score1h * 0.15)
+        ).roundToInt()
+
         val overallSignal = when {
             weightedBullish >= 75 -> SignalType.STRONG_BUY
             weightedBullish >= 58 -> SignalType.BUY
@@ -217,10 +272,19 @@ class CryptoRepository(
             else -> SignalType.STRONG_SELL
         }
 
+        val overallSentimentArabic = when {
+            weightedBullish >= 65 -> "إجماع قوي لصالح ارتفاع البيتكوين عبر جميع الأطر الزمنية ومنصات التداول"
+            weightedBullish >= 53 -> "ميل إيجابي معتدل مع تماسك قوي لدفتر الأوامر والسيولة اللحظية"
+            weightedBullish in 47..52 -> "حركة عرضية وترقب لكسر مستويات الدعم أو المقاومة الحالية"
+            else -> "ضغط بيعي لحظي يتطلب الحذر وإدارة المخاطر عند التداول"
+        }
+
         _multiTimeframeSignals.value = MultiTimeframeSignals(
             signalsByTimeframe = newSignals,
+            predictionsByTimeframe = predictions,
             overallBullishProbability = weightedBullish,
-            overallSignalType = overallSignal
+            overallSignalType = overallSignal,
+            overallSentimentArabic = overallSentimentArabic
         )
     }
 

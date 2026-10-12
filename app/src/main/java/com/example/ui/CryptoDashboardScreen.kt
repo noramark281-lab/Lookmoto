@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,7 +64,9 @@ import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
 import com.example.ui.components.CandleStickChart
 import com.example.ui.components.IndicatorDashboard
+import com.example.ui.components.NewsSentimentView
 import com.example.ui.components.OrderBookAndTradesView
+import com.example.ui.components.PredictionsView
 import com.example.ui.components.RiskMatrixCard
 import com.example.ui.components.SignalBreakdownDialog
 import com.example.ui.theme.CryptoBgDark
@@ -101,98 +105,122 @@ fun CryptoDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // 1. Top Header Bar (Pair, Exchange Switcher, Connection Status, Refresh)
+            // Top App Bar
             TopDashboardHeader(
                 activeExchange = state.activeExchange,
                 connectionStatus = state.connectionStatus,
                 onSwitchExchange = { viewModel.switchExchange(it) },
-                onRefresh = { viewModel.refresh() }
+                onRefresh = { viewModel.refreshData() }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 2. Real-Time Price Hero Card with Tick Flash Animation
-            PriceHeroCard(
+            // Live Price & 24h Ticker Banner
+            LiveTickerHeader(
                 ticker = state.ticker,
                 tickDirection = state.tickDirection
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Probabilistic Signal Master Meter
-            SignalProbabilisticCard(
-                signal = state.currentSignal,
-                timeframe = state.selectedTimeframe,
-                onOpenDetails = { viewModel.toggleSignalBreakdown(true) }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 4. Interactive Timeframe Toggle Bar (1m, 5m, 30m)
-            TimeframeToggleBar(
+            // Timeframe Selector Chips
+            TimeframeSelectorRow(
                 selectedTimeframe = state.selectedTimeframe,
-                onSelectTimeframe = { viewModel.setTimeframe(it) }
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 5. Dashboard View Navigation Tabs
-            DashboardTabBar(
-                selectedTab = state.selectedTab,
-                onSelectTab = { viewModel.setTab(it) }
+                onSelectTimeframe = { viewModel.selectTimeframe(it) }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 6. Tab Content Switcher
-            when (state.selectedTab) {
-                DashboardTab.CHART_SIGNALS -> {
-                    // Candlestick Chart with EMAs and Bollinger Overlays
-                    CandleStickChart(
-                        candles = state.candles,
-                        onCandleSelected = { viewModel.inspectCandle(it) }
-                    )
+            // Scrollable Tabs
+            DashboardTabsRow(
+                selectedTab = state.selectedTab,
+                onSelectTab = { viewModel.selectTab(it) }
+            )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                    // Quick Risk Matrix Summary
-                    RiskMatrixCard(
-                        risk = state.currentSignal?.riskManagement,
-                        isBullish = state.currentSignal?.probabilityBullish?.let { it >= 50 } ?: true
-                    )
+            if (state.isLoading && state.candles.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(color = CryptoCyan)
+                        Text(
+                            text = "جارٍ جلب البيانات الحية وربط المنصات...",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
                 }
+            } else {
+                when (state.selectedTab) {
+                    DashboardTab.PREDICTIONS -> {
+                        PredictionsView(
+                            multiSignals = state.multiTimeframe,
+                            selectedTimeframe = state.selectedTimeframe,
+                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0,
+                            onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                        )
+                    }
 
-                DashboardTab.INDICATORS -> {
-                    // Full Technical Indicators Dashboard
-                    IndicatorDashboard(
-                        indicators = state.indicators,
-                        currentPrice = state.ticker.price
-                    )
-                }
+                    DashboardTab.CHART_SIGNALS -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Signal Bar Card
+                            HeroSignalBanner(
+                                signal = state.currentSignal,
+                                onOpenBreakdown = { viewModel.toggleSignalBreakdown(true) }
+                            )
 
-                DashboardTab.RISK_MATRIX -> {
-                    // Dedicated Risk Levels & Dynamic Support/Resistance View
-                    RiskMatrixCard(
-                        risk = state.currentSignal?.riskManagement,
-                        isBullish = state.currentSignal?.probabilityBullish?.let { it >= 50 } ?: true
-                    )
-                }
+                            // Interactive Candle Chart
+                            CandleStickChart(
+                                candles = state.candles,
+                                onCandleSelected = { viewModel.inspectCandle(it) }
+                            )
+                        }
+                    }
 
-                DashboardTab.ORDER_BOOK -> {
-                    // Live Order Book Depth & Agg Trades Tape
-                    OrderBookAndTradesView(
-                        orderBook = state.orderBook,
-                        recentTrades = state.recentTrades
-                    )
+                    DashboardTab.INDICATORS -> {
+                        IndicatorDashboard(
+                            indicators = state.indicators,
+                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0
+                        )
+                    }
+
+                    DashboardTab.NEWS_SENTIMENT -> {
+                        NewsSentimentView(
+                            marketSentiment = state.marketSentiment,
+                            newsFeed = state.newsFeed
+                        )
+                    }
+
+                    DashboardTab.ORDER_BOOK -> {
+                        OrderBookAndTradesView(
+                            orderBook = state.orderBook,
+                            recentTrades = state.recentTrades
+                        )
+                    }
+
+                    DashboardTab.RISK_MATRIX -> {
+                        RiskMatrixCard(
+                            risk = state.currentSignal?.riskManagement,
+                            isBullish = state.currentSignal?.signalType?.isBullish ?: true
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(30.dp))
         }
 
-        // Signal Breakdown Details Modal Dialog
+        // Algorithmic Signal Breakdown Dialog
         if (state.showSignalBreakdown) {
             SignalBreakdownDialog(
                 currentSignal = state.currentSignal,
@@ -204,13 +232,13 @@ fun CryptoDashboardScreen(
 }
 
 @Composable
-fun TopDashboardHeader(
+private fun TopDashboardHeader(
     activeExchange: ExchangeSource,
     connectionStatus: ConnectionStatus,
     onSwitchExchange: (ExchangeSource) -> Unit,
     onRefresh: () -> Unit
 ) {
-    var exchangeMenuExpanded by remember { mutableStateOf(false) }
+    var showExchangeMenu by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -219,121 +247,124 @@ fun TopDashboardHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Pair Badge & Exchange Dropdown
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(CryptoYellow.copy(alpha = 0.2f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "₿ BTC/USDT",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CryptoYellow
+                    text = "BTC Signal Pro",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    color = TextPrimary
                 )
-            }
-
-            // Exchange Switcher Chip
-            Box {
-                Row(
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(CryptoCardDark)
-                        .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
-                        .clickable { exchangeMenuExpanded = true }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(CryptoCyan.copy(alpha = 0.15f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = activeExchange.displayName,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary
-                    )
-                    Icon(
-                        imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = "Switch Exchange",
-                        tint = CryptoCyan,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = exchangeMenuExpanded,
-                    onDismissRequest = { exchangeMenuExpanded = false },
-                    modifier = Modifier.background(CryptoSurfaceDark)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Binance Spot (Primary)", color = TextPrimary, fontSize = 12.sp) },
-                        onClick = {
-                            onSwitchExchange(ExchangeSource.BINANCE)
-                            exchangeMenuExpanded = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("MEXC Spot (High Frequency)", color = TextPrimary, fontSize = 12.sp) },
-                        onClick = {
-                            onSwitchExchange(ExchangeSource.MEXC)
-                            exchangeMenuExpanded = false
-                        }
+                        text = "BTC/USDT",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CryptoCyan
                     )
                 }
             }
-        }
 
-        // Connection Status & Refresh Button
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Live Status Indicator
+            // Connection Badge
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CryptoCardDark)
-                    .border(1.dp, CryptoCardBorder, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                val dotColor = when (connectionStatus) {
+                val statusColor = when (connectionStatus) {
                     ConnectionStatus.CONNECTED -> CryptoGreen
                     ConnectionStatus.CONNECTING -> CryptoYellow
                     else -> CryptoRed
                 }
                 Box(
                     modifier = Modifier
-                        .size(6.dp)
+                        .size(7.dp)
                         .clip(CircleShape)
-                        .background(dotColor)
+                        .background(statusColor)
                 )
                 Text(
-                    text = connectionStatus.label,
+                    text = connectionStatus.labelArabic,
                     fontSize = 10.sp,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Medium
+                    color = TextMuted
                 )
             }
+        }
 
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Exchange Switcher
+            Box {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CryptoCardDark)
+                        .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
+                        .clickable { showExchangeMenu = true }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SwapHoriz,
+                        contentDescription = "تبديل المنصة",
+                        tint = CryptoCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = activeExchange.displayName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showExchangeMenu,
+                    onDismissRequest = { showExchangeMenu = false },
+                    modifier = Modifier.background(CryptoSurfaceDark)
+                ) {
+                    ExchangeSource.values().forEach { exchange ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = exchange.displayName,
+                                    color = if (exchange == activeExchange) CryptoCyan else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (exchange == activeExchange) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                onSwitchExchange(exchange)
+                                showExchangeMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Refresh Button
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(CryptoCardDark)
-                    .border(1.dp, CryptoCardBorder, CircleShape)
-                    .testTag("refresh_button")
+                    .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
+                    .testTag("refresh_dashboard_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Refresh Feed",
-                    tint = TextPrimary,
+                    contentDescription = "تحديث",
+                    tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -342,270 +373,125 @@ fun TopDashboardHeader(
 }
 
 @Composable
-fun PriceHeroCard(
+private fun LiveTickerHeader(
     ticker: TickerData,
     tickDirection: TickDirection
 ) {
-    // Millisecond tick flash animation colors
-    val animatedTextColor by animateColorAsState(
+    val isPositive = ticker.priceChangePercent >= 0
+    val tickColor by animateColorAsState(
         targetValue = when (tickDirection) {
-            TickDirection.UP -> CryptoGreenGlow
-            TickDirection.DOWN -> CryptoRedGlow
+            TickDirection.UP -> CryptoGreen
+            TickDirection.DOWN -> CryptoRed
             TickDirection.NONE -> TextPrimary
         },
-        animationSpec = tween(durationMillis = 250),
-        label = "price_color_flash"
+        animationSpec = tween(300),
+        label = "tick_color"
     )
 
-    val animatedBgFlash by animateColorAsState(
-        targetValue = when (tickDirection) {
-            TickDirection.UP -> CryptoGreen.copy(alpha = 0.12f)
-            TickDirection.DOWN -> CryptoRed.copy(alpha = 0.12f)
-            TickDirection.NONE -> Color.Transparent
-        },
-        animationSpec = tween(durationMillis = 250),
-        label = "bg_color_flash"
-    )
-
-    val isPositive24h = ticker.priceChangePercent >= 0
-
-    Box(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(CryptoCardDark)
-            .background(animatedBgFlash)
-            .border(1.dp, CryptoCardBorder, RoundedCornerShape(16.dp))
-            .padding(14.dp)
-            .testTag("price_hero_card")
+            .border(1.dp, CryptoCardBorder, RoundedCornerShape(14.dp))
+            .testTag("live_ticker_card"),
+        colors = CardDefaults.cardColors(containerColor = CryptoCardDark),
+        shape = RoundedCornerShape(14.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Large Live Price
-                Column {
-                    Text("Spot Index Price", fontSize = 10.sp, color = TextMuted)
-                    Text(
-                        text = if (ticker.price > 0) "$${String.format("%,.2f", ticker.price)}" else "$--",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = animatedTextColor
-                    )
-                }
-
-                // 24h Change Pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isPositive24h) CryptoGreen.copy(alpha = 0.2f) else CryptoRed.copy(alpha = 0.2f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = if (ticker.price > 0) "$${String.format("%,.2f", ticker.price)}" else "--",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    color = tickColor
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (isPositive24h) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                            contentDescription = null,
-                            tint = if (isPositive24h) CryptoGreen else CryptoRed,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (isPositive) CryptoGreen.copy(alpha = 0.15f) else CryptoRed.copy(alpha = 0.15f)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
                         Text(
                             text = String.format("%+.2f%%", ticker.priceChangePercent),
-                            fontSize = 13.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isPositive24h) CryptoGreen else CryptoRed
+                            color = if (isPositive) CryptoGreen else CryptoRed
                         )
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 24h Stats Row (High, Low, 24h Volume)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0x0CFFFFFF))
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("24h High", fontSize = 9.sp, color = TextMuted)
-                    Text("$${String.format("%,.1f", ticker.high24h)}", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                }
-                Column {
-                    Text("24h Low", fontSize = 9.sp, color = TextMuted)
-                    Text("$${String.format("%,.1f", ticker.low24h)}", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("24h Vol (BTC)", fontSize = 9.sp, color = TextMuted)
-                    Text("${String.format("%,.0f", ticker.volume24h)} ₿", fontSize = 11.sp, color = CryptoCyan, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SignalProbabilisticCard(
-    signal: SignalScore?,
-    timeframe: Timeframe,
-    onOpenDetails: () -> Unit
-) {
-    val bullishPct = signal?.probabilityBullish ?: 50
-    val bearishPct = signal?.probabilityBearish ?: 50
-    val signalType = signal?.signalType ?: SignalType.NEUTRAL
-
-    val signalColor = when (signalType) {
-        SignalType.STRONG_BUY -> CryptoGreenGlow
-        SignalType.BUY -> CryptoGreen
-        SignalType.NEUTRAL -> CryptoYellow
-        SignalType.SELL -> CryptoRed
-        SignalType.STRONG_SELL -> CryptoRedGlow
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        CryptoCardDark,
-                        signalColor.copy(alpha = 0.08f)
-                    )
-                )
-            )
-            .border(1.dp, signalColor.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-            .padding(14.dp)
-            .testTag("signal_probabilistic_card")
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
                     Text(
-                        text = "PROBABILISTIC SIGNAL (${timeframe.label})",
+                        text = "التغير: ${String.format("%+.1f", ticker.priceChange)} USDT",
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = signalType.title,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = signalColor
-                    )
-                }
-
-                IconButton(
-                    onClick = onOpenDetails,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(CryptoCardBorder)
-                        .testTag("open_signal_logic_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "View Signal Logic",
-                        tint = CryptoCyan,
-                        modifier = Modifier.size(16.dp)
+                        color = TextMuted
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Probability Dual Meter Bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "Bullish $bullishPct%",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "أعلى 24h: $${String.format("%,.0f", ticker.high24h)}",
+                    fontSize = 10.sp,
                     color = CryptoGreen
                 )
                 Text(
-                    text = "Bearish $bearishPct%",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "أدنى 24h: $${String.format("%,.0f", ticker.low24h)}",
+                    fontSize = 10.sp,
                     color = CryptoRed
                 )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Two-tone progress bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(CryptoRed)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(bullishPct / 100f)
-                        .height(8.dp)
-                        .background(CryptoGreen)
+                Text(
+                    text = "الحجم: ${String.format("%,.0f", ticker.volume24h)} BTC",
+                    fontSize = 10.sp,
+                    color = TextMuted
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Key Confluence Teaser
-            val firstConfluence = signal?.keyConfluences?.firstOrNull() ?: "Aggregating technical metrics..."
-            Text(
-                text = "• $firstConfluence",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                maxLines = 1
-            )
         }
     }
 }
 
 @Composable
-fun TimeframeToggleBar(
+private fun TimeframeSelectorRow(
     selectedTimeframe: Timeframe,
     onSelectTimeframe: (Timeframe) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(CryptoCardDark)
-            .border(1.dp, CryptoCardBorder, RoundedCornerShape(10.dp))
-            .padding(4.dp)
-            .testTag("timeframe_toggle_bar"),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .testTag("timeframe_selector_row"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Timeframe.values().forEach { tf ->
             val isSelected = tf == selectedTimeframe
+            val bg = if (isSelected) CryptoCyan.copy(alpha = 0.18f) else CryptoCardDark
+            val border = if (isSelected) CryptoCyan else CryptoCardBorder
+            val textCol = if (isSelected) CryptoCyan else TextMuted
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) CryptoCyan.copy(alpha = 0.2f) else Color.Transparent)
+                    .background(bg)
+                    .border(1.dp, border, RoundedCornerShape(8.dp))
                     .clickable { onSelectTimeframe(tf) }
-                    .padding(vertical = 7.dp)
-                    .testTag("timeframe_button_${tf.label}"),
+                    .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = tf.label,
-                    fontSize = 12.sp,
+                    text = tf.labelArabic,
+                    fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) CryptoCyan else TextSecondary
+                    color = textCol
                 )
             }
         }
@@ -613,23 +499,25 @@ fun TimeframeToggleBar(
 }
 
 @Composable
-fun DashboardTabBar(
+private fun DashboardTabsRow(
     selectedTab: DashboardTab,
     onSelectTab: (DashboardTab) -> Unit
 ) {
     ScrollableTabRow(
         selectedTabIndex = selectedTab.ordinal,
         containerColor = Color.Transparent,
-        contentColor = TextPrimary,
+        contentColor = CryptoCyan,
         edgePadding = 0.dp,
+        divider = {},
         indicator = { tabPositions ->
-            TabRowDefaults.SecondaryIndicator(
-                Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
-                color = CryptoCyan,
-                height = 2.dp
-            )
-        },
-        divider = {}
+            if (selectedTab.ordinal < tabPositions.size) {
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                    color = CryptoCyan,
+                    height = 2.dp
+                )
+            }
+        }
     ) {
         DashboardTab.values().forEach { tab ->
             val isSelected = tab == selectedTab
@@ -638,14 +526,94 @@ fun DashboardTabBar(
                 onClick = { onSelectTab(tab) },
                 text = {
                     Text(
-                        text = tab.title,
-                        fontSize = 12.sp,
+                        text = tab.titleArabic,
+                        fontSize = 11.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) CryptoCyan else TextSecondary
+                        color = if (isSelected) CryptoCyan else TextMuted
                     )
-                },
-                modifier = Modifier.testTag("dashboard_tab_${tab.name}")
+                }
             )
+        }
+    }
+}
+
+@Composable
+private fun HeroSignalBanner(
+    signal: SignalScore?,
+    onOpenBreakdown: () -> Unit
+) {
+    if (signal == null) return
+
+    val isBullish = signal.probabilityBullish >= 50
+    val primaryColor = if (isBullish) CryptoGreen else CryptoRed
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, primaryColor.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .clickable { onOpenBreakdown() }
+            .testTag("hero_signal_banner"),
+        colors = CardDefaults.cardColors(containerColor = CryptoCardDark),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isBullish) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = signal.signalType.titleArabic,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        color = primaryColor
+                    )
+                    Text(
+                        text = "احتمال الصعود: ${signal.probabilityBullish}% | الهبوط: ${signal.probabilityBearish}%",
+                        fontSize = 10.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "التفاصيل",
+                    fontSize = 10.sp,
+                    color = CryptoCyan,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "تفاصيل الإشارة",
+                    tint = CryptoCyan,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
         }
     }
 }

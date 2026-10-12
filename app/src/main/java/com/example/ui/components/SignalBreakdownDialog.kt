@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -27,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +60,7 @@ fun SignalBreakdownDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = CryptoCardBorder),
                 modifier = Modifier.testTag("dismiss_signal_breakdown_button")
             ) {
-                Text("Close Analysis", color = TextPrimary, fontSize = 12.sp)
+                Text("إغلاق التفاصيل", color = TextPrimary, fontSize = 12.sp)
             }
         },
         containerColor = CryptoSurfaceDark,
@@ -84,7 +82,7 @@ fun SignalBreakdownDialog(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Algorithmic Signal Logic",
+                        text = "تفاصيل المنطق الخوارزمي للإشارة",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -94,7 +92,7 @@ fun SignalBreakdownDialog(
                 IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = "إغلاق",
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -110,7 +108,7 @@ fun SignalBreakdownDialog(
             ) {
                 // Multi-Timeframe Matrix
                 Text(
-                    text = "Multi-Timeframe Probability Confluence",
+                    text = "توافق احتمالية الاتجاه عبر الأطر الزمنية",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextSecondary
@@ -118,20 +116,25 @@ fun SignalBreakdownDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     TimeframePill(
-                        label = "1m Scalp",
+                        label = "1 دقيقة",
                         score = multiTimeframe.signalsByTimeframe[Timeframe.ONE_MIN]?.probabilityBullish ?: 50,
                         modifier = Modifier.weight(1f)
                     )
                     TimeframePill(
-                        label = "5m Swing",
+                        label = "5 دقائق",
                         score = multiTimeframe.signalsByTimeframe[Timeframe.FIVE_MIN]?.probabilityBullish ?: 50,
                         modifier = Modifier.weight(1f)
                     )
                     TimeframePill(
-                        label = "30m Trend",
+                        label = "15 دقيقة",
+                        score = multiTimeframe.signalsByTimeframe[Timeframe.FIFTEEN_MIN]?.probabilityBullish ?: 50,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TimeframePill(
+                        label = "30 دقيقة",
                         score = multiTimeframe.signalsByTimeframe[Timeframe.THIRTY_MIN]?.probabilityBullish ?: 50,
                         modifier = Modifier.weight(1f)
                     )
@@ -151,7 +154,7 @@ fun SignalBreakdownDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Signal Confidence Score", fontSize = 10.sp, color = TextMuted)
+                        Text("درجة الثقة الخوارزمية", fontSize = 10.sp, color = TextMuted)
                         Text(
                             text = "${currentSignal.confluenceScore} / 10.0",
                             fontSize = 15.sp,
@@ -161,9 +164,9 @@ fun SignalBreakdownDialog(
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("Trend Vector", fontSize = 10.sp, color = TextMuted)
+                        Text("مسار الاتجاه", fontSize = 10.sp, color = TextMuted)
                         Text(
-                            text = currentSignal.trendDirection.label,
+                            text = currentSignal.trendDirection.labelArabic,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (currentSignal.probabilityBullish >= 50) CryptoGreen else CryptoRed
@@ -175,7 +178,7 @@ fun SignalBreakdownDialog(
 
                 // Algorithmic Factor Checklist
                 Text(
-                    text = "Key Confluence Triggers (${currentSignal.timeframe.label})",
+                    text = "العوامل والمؤشرات الفاعلة (${currentSignal.timeframe.labelArabic})",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextSecondary
@@ -220,19 +223,19 @@ private fun TimeframePill(
             .clip(RoundedCornerShape(8.dp))
             .background(CryptoCardDark)
             .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
-            .padding(8.dp),
+            .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = label, fontSize = 9.sp, color = TextMuted)
+        Text(text = label, fontSize = 8.sp, color = TextMuted)
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = "$score%",
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = color
         )
         Text(
-            text = if (isBullish) "Bullish" else "Bearish",
+            text = if (isBullish) "صعود" else "هبوط",
             fontSize = 8.sp,
             color = color.copy(alpha = 0.8f)
         )

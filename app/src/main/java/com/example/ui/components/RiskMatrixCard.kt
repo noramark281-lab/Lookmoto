@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,7 +33,6 @@ import com.example.ui.theme.CryptoCardBorder
 import com.example.ui.theme.CryptoCardDark
 import com.example.ui.theme.CryptoCyan
 import com.example.ui.theme.CryptoGreen
-import com.example.ui.theme.CryptoOrange
 import com.example.ui.theme.CryptoRed
 import com.example.ui.theme.CryptoYellow
 import com.example.ui.theme.TextMuted
@@ -70,12 +68,12 @@ fun RiskMatrixCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Security,
-                        contentDescription = "Risk Management",
+                        contentDescription = "إدارة المخاطر",
                         tint = CryptoYellow,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Automated Risk Matrix",
+                        text = "مصفوفة إدارة المخاطر وأهداف الصفقة",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -89,7 +87,7 @@ fun RiskMatrixCard(
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
-                        text = "R:R 1 : ${String.format("%.1f", risk.riskRewardRatio)}",
+                        text = "العائد / المخاطرة 1 : ${String.format("%.1f", risk.riskRewardRatio)}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = CryptoYellow
@@ -109,7 +107,7 @@ fun RiskMatrixCard(
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Dynamic Support", fontSize = 10.sp, color = TextMuted)
+                    Text("الدعم الديناميكي", fontSize = 10.sp, color = TextMuted)
                     Text(
                         text = "$${formatPrice(risk.supportLevel)}",
                         fontSize = 12.sp,
@@ -125,7 +123,7 @@ fun RiskMatrixCard(
                 )
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Dynamic Resistance", fontSize = 10.sp, color = TextMuted)
+                    Text("المقاومة الديناميكية", fontSize = 10.sp, color = TextMuted)
                     Text(
                         text = "$${formatPrice(risk.resistanceLevel)}",
                         fontSize = 12.sp,
@@ -141,7 +139,7 @@ fun RiskMatrixCard(
                 )
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ATR Volatility", fontSize = 10.sp, color = TextMuted)
+                    Text("معدل التقلب (ATR)", fontSize = 10.sp, color = TextMuted)
                     Text(
                         text = "$${formatPrice(risk.atr)}",
                         fontSize = 12.sp,
@@ -155,44 +153,44 @@ fun RiskMatrixCard(
 
             // Stop Loss Row
             RiskTargetRow(
-                label = "Stop-Loss (SL)",
+                label = "وقف الخسارة المقترح (SL)",
                 price = risk.stopLoss,
                 percent = risk.stopLossPercent,
                 color = CryptoRed,
-                badge = "Risk Exit"
+                badge = "حماية رأس المال"
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
             // Take-Profit 1 Row
             RiskTargetRow(
-                label = "Take-Profit 1 (TP1)",
+                label = "الهدف الأول السريع (TP1)",
                 price = risk.takeProfit1,
                 percent = risk.takeProfit1Percent,
-                color = CryptoGreen.copy(alpha = 0.7f),
-                badge = "R:R 1:1.5"
+                color = CryptoGreen.copy(alpha = 0.85f),
+                badge = "هدف سريع 1.5x"
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
             // Take-Profit 2 Row
             RiskTargetRow(
-                label = "Take-Profit 2 (TP2)",
+                label = "الهدف الثاني الرئيسي (TP2)",
                 price = risk.takeProfit2,
                 percent = risk.takeProfit2Percent,
                 color = CryptoGreen,
-                badge = "R:R 1:2.5"
+                badge = "هدف رئيسي 2.5x"
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
             // Take-Profit 3 Row
             RiskTargetRow(
-                label = "Take-Profit 3 (TP3)",
+                label = "الهدف الثالث الممتد (TP3)",
                 price = risk.takeProfit3,
                 percent = risk.takeProfit3Percent,
                 color = CryptoCyan,
-                badge = "R:R 1:4.0"
+                badge = "امتداد اتجاهي 4.0x"
             )
         }
     }

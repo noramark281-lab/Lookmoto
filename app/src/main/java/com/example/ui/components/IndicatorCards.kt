@@ -22,8 +22,6 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -46,7 +44,6 @@ import com.example.ui.theme.CryptoYellow
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import kotlin.math.roundToInt
 
 @Composable
 fun IndicatorDashboard(
@@ -98,11 +95,11 @@ fun RsiCard(
 ) {
     val rsiVal = rsi ?: 50.0
     val statusText = when {
-        rsiVal >= 70.0 -> "Overbought"
-        rsiVal <= 30.0 -> "Oversold"
-        rsiVal >= 55.0 -> "Bullish Momentum"
-        rsiVal <= 45.0 -> "Bearish Momentum"
-        else -> "Neutral Zone"
+        rsiVal >= 70.0 -> "تشبع شرائي (>70)"
+        rsiVal <= 30.0 -> "تشبع بيعي (<30)"
+        rsiVal >= 55.0 -> "زخم صاعد قوي"
+        rsiVal <= 45.0 -> "زخم هابط"
+        else -> "منطقة توازن محايدة"
     }
 
     val statusColor = when {
@@ -114,7 +111,7 @@ fun RsiCard(
     }
 
     IndicatorCardContainer(
-        title = "RSI (14)",
+        title = "مؤشر القوة النسبية RSI (14)",
         icon = Icons.Default.Speed,
         modifier = modifier.testTag("rsi_card")
     ) {
@@ -149,9 +146,9 @@ fun RsiCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("30 OS", fontSize = 9.sp, color = TextMuted)
+            Text("30 تشبع", fontSize = 9.sp, color = TextMuted)
             Text(statusText, fontSize = 10.sp, color = statusColor, fontWeight = FontWeight.Medium)
-            Text("70 OB", fontSize = 9.sp, color = TextMuted)
+            Text("70 ذروة", fontSize = 9.sp, color = TextMuted)
         }
     }
 }
@@ -169,7 +166,7 @@ fun MacdCard(
     val histColor = if (histVal >= 0) CryptoGreen else CryptoRed
 
     IndicatorCardContainer(
-        title = "MACD (12, 26, 9)",
+        title = "مؤشر الماكد MACD (12, 26, 9)",
         icon = Icons.Default.ShowChart,
         modifier = modifier.testTag("macd_card")
     ) {
@@ -190,7 +187,7 @@ fun MacdCard(
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = if (isBullish) "BULL CROSS" else "BEAR CROSS",
+                    text = if (isBullish) "تقاطع صاعد 🟢" else "تقاطع هابط 🔴",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isBullish) CryptoGreen else CryptoRed
@@ -205,11 +202,11 @@ fun MacdCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("MACD", fontSize = 9.sp, color = TextMuted)
+                Text("خط MACD", fontSize = 9.sp, color = TextMuted)
                 Text(String.format("%.1f", macdVal), fontSize = 11.sp, color = CryptoCyan, fontWeight = FontWeight.Medium)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("Signal", fontSize = 9.sp, color = TextMuted)
+                Text("خط الإشارة", fontSize = 9.sp, color = TextMuted)
                 Text(String.format("%.1f", signalVal), fontSize = 11.sp, color = CryptoYellow, fontWeight = FontWeight.Medium)
             }
         }
@@ -228,7 +225,7 @@ fun EmaRibbonCard(
     val isBearishStack = ema9 != null && ema21 != null && ema50 != null && (ema9 < ema21 && ema21 < ema50)
 
     IndicatorCardContainer(
-        title = "EMA Trend Ribbon",
+        title = "شريط المتوسطات الأسية (EMA Ribbon)",
         icon = Icons.Default.Timeline,
         modifier = modifier.testTag("ema_ribbon_card")
     ) {
@@ -257,9 +254,9 @@ fun EmaRibbonCard(
             ) {
                 Text(
                     text = when {
-                        isBullishStack -> "BULL STACK"
-                        isBearishStack -> "BEAR STACK"
-                        else -> "MIXED ALIGN"
+                        isBullishStack -> "نسق صاعد قوي 🚀"
+                        isBearishStack -> "نسق هابط 📉"
+                        else -> "نسق عرضي متداخل"
                     },
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -309,7 +306,7 @@ fun BollingerBandsCard(
     val percentB = bb?.percentB ?: 0.5
 
     IndicatorCardContainer(
-        title = "Bollinger Bands (20, 2.0σ)",
+        title = "نطاقات بولينجر Bollinger Bands (20, 2.0σ)",
         icon = Icons.Default.TrendingUp,
         modifier = modifier.testTag("bollinger_bands_card")
     ) {
@@ -319,19 +316,19 @@ fun BollingerBandsCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("Upper Band", fontSize = 9.sp, color = TextMuted)
+                Text("الحد العلوي", fontSize = 9.sp, color = TextMuted)
                 Text(String.format("%,.1f", upper), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = CryptoRed)
             }
             Column {
-                Text("Basis (SMA20)", fontSize = 9.sp, color = TextMuted)
+                Text("المتوسط SMA20", fontSize = 9.sp, color = TextMuted)
                 Text(String.format("%,.1f", middle), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = CryptoYellow)
             }
             Column {
-                Text("Lower Band", fontSize = 9.sp, color = TextMuted)
+                Text("الحد السفلي", fontSize = 9.sp, color = TextMuted)
                 Text(String.format("%,.1f", lower), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = CryptoGreen)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("Bandwidth", fontSize = 9.sp, color = TextMuted)
+                Text("عرض النطاق", fontSize = 9.sp, color = TextMuted)
                 Text(
                     text = String.format("%.2f%%", bandwidth),
                     fontSize = 12.sp,
@@ -349,7 +346,7 @@ fun BollingerBandsCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Channel Position (%B)", fontSize = 10.sp, color = TextSecondary)
+                Text("موقع السعر في القناة (%B)", fontSize = 10.sp, color = TextSecondary)
                 Text(String.format("%.2f", percentB), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CryptoCyan)
             }
             Spacer(modifier = Modifier.height(4.dp))

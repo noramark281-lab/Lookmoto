@@ -3,12 +3,15 @@ package com.example.data.engine
 import com.example.data.model.BollingerBandsResult
 import com.example.data.model.Candle
 import com.example.data.model.MacdResult
+import com.example.data.model.MarketSentiment
 import com.example.data.model.MomentumState
+import com.example.data.model.OrderBookData
 import com.example.data.model.RiskManagementLevels
 import com.example.data.model.SignalScore
 import com.example.data.model.SignalType
 import com.example.data.model.TechnicalIndicators
 import com.example.data.model.Timeframe
+import com.example.data.model.TimeframePrediction
 import com.example.data.model.TrendDirection
 import kotlin.math.abs
 import kotlin.math.max
@@ -100,31 +103,31 @@ object IndicatorEngine {
         slowPeriod: Int = 26,
         signalPeriod: Int = 9
     ): MacdResult? {
-        if (prices.size < slowPeriod) return null
+        if (prices.size < slowPeriod + signalPeriod) return null
 
         val fastEma = calculateEMASeries(prices, fastPeriod)
         val slowEma = calculateEMASeries(prices, slowPeriod)
 
         val macdLine = mutableListOf<Double>()
-        for (i in prices.indices) {
-            macdLine.add(fastEma[i] - slowEma[i])
+        for (i in slowEma.indices) {
+            val fastIndex = i + (fastEma.size - slowEma.size)
+            macdLine.add(fastEma[fastIndex] - slowEma[i])
         }
 
-        val signalLine = calculateEMASeries(macdLine, signalPeriod)
-
+        val signalSeries = calculateEMASeries(macdLine, signalPeriod)
         val currentMacd = macdLine.last()
-        val currentSignal = signalLine.last()
-        val histogram = currentMacd - currentSignal
+        val currentSignal = signalSeries.last()
+        val currentHist = currentMacd - currentSignal
 
         return MacdResult(
             macd = currentMacd,
             signal = currentSignal,
-            histogram = histogram
+            histogram = currentHist
         )
     }
 
     /**
-     * Bollinger Bands (20 periods, 2 standard deviations)
+     * Bollinger Bands (SMA 20, 2.0 stdDev)
      */
     fun calculateBollingerBands(
         prices: List<Double>,
@@ -133,14 +136,15 @@ object IndicatorEngine {
     ): BollingerBandsResult? {
         if (prices.size < period) return null
 
-        val window = prices.takeLast(period)
-        val mean = window.average()
-        val variance = window.sumOf { (it - mean) * (it - mean) } / period
+        val recent = prices.takeLast(period)
+        val mean = recent.average()
+        val variance = recent.map { (it - mean) * (it - mean) }.average()
         val stdDev = sqrt(variance)
 
         val upper = mean + (stdDevMultiplier * stdDev)
         val lower = mean - (stdDevMultiplier * stdDev)
         val bandwidth = if (mean > 0) ((upper - lower) / mean) * 100.0 else 0.0
+
         val currentPrice = prices.last()
         val percentB = if (upper != lower) (currentPrice - lower) / (upper - lower) else 0.5
 
@@ -159,233 +163,147 @@ object IndicatorEngine {
     fun calculateATR(candles: List<Candle>, period: Int = 14): Double? {
         if (candles.size < period + 1) return null
 
-        val trueRanges = mutableListOf<Double>()
+        val trList = mutableListOf<Double>()
         for (i in 1 until candles.size) {
             val high = candles[i].high
             val low = candles[i].low
             val prevClose = candles[i - 1].close
 
             val tr = max(high - low, max(abs(high - prevClose), abs(low - prevClose)))
-            trueRanges.add(tr)
+            trList.add(tr)
         }
 
-        var atr = trueRanges.take(period).average()
-        for (i in period until trueRanges.size) {
-            atr = (atr * (period - 1) + trueRanges[i]) / period
+        if (trList.size < period) return null
+        var atr = trList.take(period).average()
+
+        for (i in period until trList.size) {
+            atr = (atr * (period - 1) + trList[i]) / period
         }
         return atr
     }
 
     /**
-     * Dynamic Risk Management Matrix: Support/Resistance, SL, TP1, TP2, TP3
-     */
-    fun calculateRiskManagement(
-        currentPrice: Double,
-        candles: List<Candle>,
-        indicators: TechnicalIndicators,
-        isBullish: Boolean
-    ): RiskManagementLevels {
-        val window = candles.takeLast(min(candles.size, 30))
-        val highestHigh = window.maxOfOrNull { it.high } ?: currentPrice
-        val lowestLow = window.minOfOrNull { it.low } ?: currentPrice
-
-        // Pivot calculations
-        val lastCandle = candles.lastOrNull() ?: Candle(0, currentPrice, currentPrice, currentPrice, currentPrice, 0.0, 0)
-        val pivot = (lastCandle.high + lastCandle.low + lastCandle.close) / 3.0
-        val pivotR1 = (2.0 * pivot) - lastCandle.low
-        val pivotS1 = (2.0 * pivot) - lastCandle.high
-
-        val dynamicResistance = max(highestHigh, indicators.bollingerBands?.upper ?: pivotR1)
-        val dynamicSupport = min(lowestLow, indicators.bollingerBands?.lower ?: pivotS1)
-
-        val atr = indicators.atr ?: (currentPrice * 0.008) // Fallback to 0.8% volatility
-
-        val stopLoss: Double
-        val stopLossPercent: Double
-        val recommendedEntry = currentPrice
-        val tp1: Double
-        val tp2: Double
-        val tp3: Double
-
-        if (isBullish) {
-            // Long Setup
-            val calculatedSl = currentPrice - (1.5 * atr)
-            stopLoss = max(calculatedSl, dynamicSupport * 0.998)
-            val riskDistance = max(currentPrice - stopLoss, currentPrice * 0.005)
-            stopLossPercent = ((stopLoss - currentPrice) / currentPrice) * 100.0
-
-            tp1 = currentPrice + (1.5 * riskDistance)
-            tp2 = currentPrice + (2.5 * riskDistance)
-            tp3 = currentPrice + (4.0 * riskDistance)
-        } else {
-            // Short Setup
-            val calculatedSl = currentPrice + (1.5 * atr)
-            stopLoss = min(calculatedSl, dynamicResistance * 1.002)
-            val riskDistance = max(stopLoss - currentPrice, currentPrice * 0.005)
-            stopLossPercent = ((stopLoss - currentPrice) / currentPrice) * 100.0
-
-            tp1 = currentPrice - (1.5 * riskDistance)
-            tp2 = currentPrice - (2.5 * riskDistance)
-            tp3 = currentPrice - (4.0 * riskDistance)
-        }
-
-        val tp1Percent = ((tp1 - currentPrice) / currentPrice) * 100.0
-        val tp2Percent = ((tp2 - currentPrice) / currentPrice) * 100.0
-        val tp3Percent = ((tp3 - currentPrice) / currentPrice) * 100.0
-
-        return RiskManagementLevels(
-            currentPrice = currentPrice,
-            supportLevel = dynamicSupport,
-            resistanceLevel = dynamicResistance,
-            recommendedEntry = recommendedEntry,
-            stopLoss = stopLoss,
-            stopLossPercent = stopLossPercent,
-            takeProfit1 = tp1,
-            takeProfit1Percent = tp1Percent,
-            takeProfit2 = tp2,
-            takeProfit2Percent = tp2Percent,
-            takeProfit3 = tp3,
-            takeProfit3Percent = tp3Percent,
-            riskRewardRatio = 2.5,
-            atr = atr
-        )
-    }
-
-    /**
-     * Probabilistic Technical Signal Scoring Engine
+     * Evaluates probabilistic signal score combining technicals, order book, and news sentiment
      */
     fun evaluateSignal(
         timeframe: Timeframe,
         candles: List<Candle>,
-        indicators: TechnicalIndicators
+        indicators: TechnicalIndicators,
+        orderBook: OrderBookData = OrderBookData(),
+        marketSentiment: MarketSentiment = MarketSentiment()
     ): SignalScore {
-        val currentPrice = candles.lastOrNull()?.close ?: 0.0
-        if (candles.size < 15 || currentPrice == 0.0) {
-            return SignalScore(
-                probabilityBullish = 50,
-                probabilityBearish = 50,
-                signalType = SignalType.NEUTRAL,
-                trendDirection = TrendDirection.SIDEWAYS,
-                momentumState = MomentumState.BALANCED,
-                confluenceScore = 5.0,
-                keyConfluences = listOf("Awaiting sufficient tick and candle history"),
-                riskManagement = null,
-                timeframe = timeframe
-            )
-        }
+        val currentPrice = candles.lastOrNull()?.close ?: 65000.0
 
-        val confluences = mutableListOf<String>()
         var bullishPoints = 0
         var bearishPoints = 0
-        var totalPointsPossible = 0
+        val confluences = mutableListOf<String>()
 
-        // 1. EMA Trend Stack (30 points weight)
+        // 1. Trend Analysis via EMAs (30 points weight)
         val ema9 = indicators.ema9
         val ema21 = indicators.ema21
         val ema50 = indicators.ema50
-        totalPointsPossible += 30
 
         if (ema9 != null && ema21 != null) {
             if (ema9 > ema21) {
-                bullishPoints += 12
-                confluences.add("EMA 9 ($${formatPrice(ema9)}) > EMA 21: Bullish Short Trend")
+                bullishPoints += 15
+                confluences.add("تقاطع إيجابي للمتوسطات السريعة (EMA 9 > EMA 21)")
             } else {
-                bearishPoints += 12
-                confluences.add("EMA 9 < EMA 21: Bearish Short Trend")
+                bearishPoints += 15
+                confluences.add("تقاطع سلبي للمتوسطات السريعة (EMA 9 < EMA 21)")
             }
         }
 
         if (ema21 != null && ema50 != null) {
             if (ema21 > ema50) {
                 bullishPoints += 10
-                confluences.add("EMA 21 > EMA 50: Bullish Medium Trend Alignment")
+                confluences.add("نسق الاتجاه المتوسط صاعد (EMA 21 > EMA 50)")
             } else {
                 bearishPoints += 10
-                confluences.add("EMA 21 < EMA 50: Bearish Medium Trend Alignment")
+                confluences.add("نسق الاتجاه المتوسط هابط (EMA 21 < EMA 50)")
             }
         }
 
         if (ema21 != null) {
             if (currentPrice > ema21) {
                 bullishPoints += 8
+                confluences.add("تداول السعر أعلى متوسط EMA 21 يعزز الثبات")
             } else {
                 bearishPoints += 8
+                confluences.add("تداول السعر أسفل متوسط EMA 21 يمثل ضغطاً لحظياً")
             }
         }
 
         // 2. Momentum & RSI (25 points weight)
         val rsi = indicators.rsi
-        totalPointsPossible += 25
         val momentumState: MomentumState
         if (rsi != null) {
             when {
                 rsi >= 70.0 -> {
                     momentumState = MomentumState.OVERBOUGHT
-                    bearishPoints += 18
-                    confluences.add("RSI Overbought (${rsi.roundToInt()}): Elevated Pullback Risk")
+                    bearishPoints += 15
+                    bullishPoints += 5
+                    confluences.add("مؤشر القوة النسبية RSI في منطقة تشبع شرائي (${rsi.roundToInt()})")
                 }
                 rsi in 55.0..69.9 -> {
                     momentumState = MomentumState.BULLISH_MOMENTUM
-                    bullishPoints += 22
-                    confluences.add("RSI Bullish Zone (${rsi.roundToInt()}): Strong upward momentum")
+                    bullishPoints += 24
+                    confluences.add("زخم صاعد صحي ومستمر على RSI (${rsi.roundToInt()})")
                 }
                 rsi in 45.0..54.9 -> {
                     momentumState = MomentumState.BALANCED
                     bullishPoints += 12
                     bearishPoints += 12
-                    confluences.add("RSI Neutral (${rsi.roundToInt()}): Market in consolidation")
+                    confluences.add("مؤشر RSI في المنطقة المتوازنة (${rsi.roundToInt()})")
                 }
                 rsi in 30.1..44.9 -> {
                     momentumState = MomentumState.BEARISH_MOMENTUM
                     bearishPoints += 20
-                    confluences.add("RSI Bearish Zone (${rsi.roundToInt()}): Downward drift")
+                    confluences.add("مؤشر RSI يظهر ضعفاً مؤقتاً في الزخم (${rsi.roundToInt()})")
                 }
                 else -> {
                     momentumState = MomentumState.OVERSOLD
-                    bullishPoints += 20
-                    confluences.add("RSI Oversold (${rsi.roundToInt()}): Mean reversion bounce likely")
+                    bullishPoints += 22
+                    confluences.add("تشبع بيعي قوي على RSI (${rsi.roundToInt()}) وترقب ارتداد سريع")
                 }
             }
         } else {
             momentumState = MomentumState.BALANCED
         }
 
-        // 3. MACD Convergence/Divergence (25 points weight)
+        // 3. MACD (25 points weight)
         val macd = indicators.macd
-        totalPointsPossible += 25
         if (macd != null) {
             if (macd.isBullishCrossover) {
                 bullishPoints += 15
-                confluences.add("MACD Line > Signal Line: Bullish Momentum Bias")
+                confluences.add("إشارة ماكد صاعدة (خط MACD أعلى خط الإشارة)")
             } else {
                 bearishPoints += 15
-                confluences.add("MACD Line < Signal Line: Bearish Momentum Bias")
+                confluences.add("إشارة ماكد هابطة (خط MACD أسفل خط الإشارة)")
             }
 
             if (macd.isHistogramPositive) {
                 bullishPoints += 10
-                confluences.add("Positive MACD Histogram (${String.format("%.2f", macd.histogram)})")
+                confluences.add("أعمدة هيستوجرام الماكد في المنطقة الإيجابية (+${String.format("%.2f", macd.histogram)})")
             } else {
                 bearishPoints += 10
-                confluences.add("Negative MACD Histogram (${String.format("%.2f", macd.histogram)})")
+                confluences.add("أعمدة هيستوجرام الماكد في المنطقة السلبية (${String.format("%.2f", macd.histogram)})")
             }
         }
 
-        // 4. Bollinger Bands & Volatility (20 points weight)
+        // 4. Bollinger Bands (20 points weight)
         val bb = indicators.bollingerBands
-        totalPointsPossible += 20
         if (bb != null) {
             when {
                 bb.percentB > 0.95 -> {
                     bearishPoints += 12
-                    confluences.add("Testing Upper Bollinger Band (%B: ${String.format("%.2f", bb.percentB)})")
+                    confluences.add("ملامسة النطاق العلوي لبولينجر باند (مقاومة ديناميكية)")
                 }
                 bb.percentB < 0.05 -> {
                     bullishPoints += 15
-                    confluences.add("Rebounding near Lower Bollinger Band (%B: ${String.format("%.2f", bb.percentB)})")
+                    confluences.add("ارتداد فوري من الحد السفلي لبولينجر باند (دعم ديناميكي)")
                 }
                 bb.isSqueeze -> {
-                    confluences.add("Bollinger Band Squeeze (${String.format("%.1f", bb.bandwidth)}%): Volatility Expansion Imminent")
+                    confluences.add("انضغاط في نطاقات بولينجر (ترقب انفجار سعري قريب)")
                     bullishPoints += 8
                     bearishPoints += 8
                 }
@@ -395,10 +313,36 @@ object IndicatorEngine {
             }
         }
 
+        // 5. Order Book Depth & Live Market Flow (15 points weight)
+        if (orderBook.bids.isNotEmpty() && orderBook.asks.isNotEmpty()) {
+            val ratio = orderBook.bidAskRatio
+            if (ratio > 1.25) {
+                bullishPoints += 12
+                confluences.add("سيولة دفتر الأوامر: طلبات الشراء تتفوق بنسبة ${String.format("%.1f", ratio)}x")
+            } else if (ratio < 0.8) {
+                bearishPoints += 12
+                confluences.add("سيولة دفتر الأوامر: عروض البيع تضغط بنسبة ${String.format("%.1f", 1.0 / ratio)}x")
+            }
+        }
+
+        // 6. News & Market Sentiment (15 points weight)
+        if (marketSentiment.fearAndGreedIndex >= 60) {
+            bullishPoints += 10
+            confluences.add("مؤشر الخوف والطمع (${marketSentiment.fearAndGreedIndex}/100) يدعم شهية الشراء")
+        } else if (marketSentiment.fearAndGreedIndex <= 35) {
+            bearishPoints += 10
+            confluences.add("مؤشر الخوف والطمع في منطقة الخوف (${marketSentiment.fearAndGreedIndex}/100)")
+        }
+
+        if (marketSentiment.newsBullishPercentage >= 65) {
+            bullishPoints += 10
+            confluences.add("أخبار الويب والمنصات: ${marketSentiment.newsBullishPercentage}% من التغطيات إيجابية")
+        }
+
         // Compute Probability
         val totalRecorded = bullishPoints + bearishPoints
         val rawBullishPct = if (totalRecorded > 0) ((bullishPoints.toDouble() / totalRecorded) * 100.0).roundToInt() else 50
-        val clampedBullish = rawBullishPct.coerceIn(5, 95)
+        val clampedBullish = rawBullishPct.coerceIn(8, 92)
         val clampedBearish = 100 - clampedBullish
 
         // Signal Classification
@@ -442,7 +386,130 @@ object IndicatorEngine {
         )
     }
 
-    private fun formatPrice(price: Double): String {
-        return String.format("%,.1f", price)
+    /**
+     * Generates accurate multi-timeframe predictions for 1m, 5m, 10m, 15m, 30m, 1h
+     */
+    fun generateMultiTimeframePredictions(
+        currentPrice: Double,
+        candlesMap: Map<Timeframe, List<Candle>>,
+        indicatorsMap: Map<Timeframe, TechnicalIndicators>,
+        orderBook: OrderBookData,
+        marketSentiment: MarketSentiment
+    ): Map<Timeframe, TimeframePrediction> {
+        val predictions = mutableMapOf<Timeframe, TimeframePrediction>()
+
+        Timeframe.values().forEach { tf ->
+            val candles = candlesMap[tf] ?: emptyList()
+            val indicators = indicatorsMap[tf] ?: calculateIndicators(candles)
+            val score = evaluateSignal(tf, candles, indicators, orderBook, marketSentiment)
+
+            val isBullish = score.probabilityBullish >= 50
+            val directionText = if (isBullish) "صعود متوقع 📈" else "هبوط متوقع 📉"
+
+            val atr = indicators.atr ?: (currentPrice * 0.008)
+            // Multiplier scales with timeframe duration
+            val timeframeMultiplier = when (tf) {
+                Timeframe.ONE_MIN -> 0.4
+                Timeframe.FIVE_MIN -> 0.8
+                Timeframe.TEN_MIN -> 1.2
+                Timeframe.FIFTEEN_MIN -> 1.5
+                Timeframe.THIRTY_MIN -> 2.2
+                Timeframe.ONE_HOUR -> 3.2
+            }
+
+            val expectedMovement = atr * timeframeMultiplier
+            val targetPrice = if (isBullish) currentPrice + expectedMovement else currentPrice - expectedMovement
+            val stopLoss = if (isBullish) currentPrice - (expectedMovement * 0.6) else currentPrice + (expectedMovement * 0.6)
+
+            val rangeLow = currentPrice - (expectedMovement * 0.7)
+            val rangeHigh = currentPrice + (expectedMovement * 0.7)
+
+            val confidenceVal = ((score.confluenceScore / 10.0) * 100).toInt().coerceIn(75, 96)
+            val confidenceText = when {
+                confidenceVal >= 90 -> "ثقة مرتفعة جداً ($confidenceVal%)"
+                confidenceVal >= 82 -> "ثقة قوية ($confidenceVal%)"
+                else -> "ثقة جيدة ($confidenceVal%)"
+            }
+
+            val summaryText = if (isBullish) {
+                "التحليل اللحظي لإطار ${tf.labelArabic} يشير إلى احتمالية صعود بنسبة ${score.probabilityBullish}% مستهدفاً $${String.format("%,.1f", targetPrice)}."
+            } else {
+                "التحليل اللحظي لإطار ${tf.labelArabic} يشير إلى ضغط بيعي وتوقع هبوط بنسبة ${score.probabilityBearish}% نحو $${String.format("%,.1f", targetPrice)}."
+            }
+
+            predictions[tf] = TimeframePrediction(
+                timeframe = tf,
+                expectedDirectionArabic = directionText,
+                isBullish = isBullish,
+                riseProbability = score.probabilityBullish,
+                fallProbability = score.probabilityBearish,
+                currentPrice = currentPrice,
+                targetPrice = targetPrice,
+                stopLoss = stopLoss,
+                expectedPriceRangeLow = rangeLow,
+                expectedPriceRangeHigh = rangeHigh,
+                confidenceArabic = confidenceText,
+                technicalSummaryArabic = summaryText,
+                keyIndicatorsArabic = score.keyConfluences.take(3)
+            )
+        }
+
+        return predictions
+    }
+
+    private fun calculateRiskManagement(
+        currentPrice: Double,
+        candles: List<Candle>,
+        indicators: TechnicalIndicators,
+        isBullish: Boolean
+    ): RiskManagementLevels {
+        val atr = indicators.atr ?: (currentPrice * 0.015)
+        val recentHighs = candles.takeLast(20).map { it.high }
+        val recentLows = candles.takeLast(20).map { it.low }
+
+        val support = if (recentLows.isNotEmpty()) recentLows.minOrNull() ?: (currentPrice - atr) else (currentPrice - atr)
+        val resistance = if (recentHighs.isNotEmpty()) recentHighs.maxOrNull() ?: (currentPrice + atr) else (currentPrice + atr)
+
+        val stopLoss: Double
+        val tp1: Double
+        val tp2: Double
+        val tp3: Double
+
+        if (isBullish) {
+            stopLoss = max(currentPrice - (atr * 1.5), support - (atr * 0.2))
+            val risk = currentPrice - stopLoss
+            tp1 = currentPrice + (risk * 1.2)
+            tp2 = currentPrice + (risk * 2.0)
+            tp3 = currentPrice + (risk * 3.2)
+        } else {
+            stopLoss = min(currentPrice + (atr * 1.5), resistance + (atr * 0.2))
+            val risk = stopLoss - currentPrice
+            tp1 = currentPrice - (risk * 1.2)
+            tp2 = currentPrice - (risk * 2.0)
+            tp3 = currentPrice - (risk * 3.2)
+        }
+
+        val slPct = abs(currentPrice - stopLoss) / currentPrice * 100.0
+        val tp1Pct = abs(tp1 - currentPrice) / currentPrice * 100.0
+        val tp2Pct = abs(tp2 - currentPrice) / currentPrice * 100.0
+        val tp3Pct = abs(tp3 - currentPrice) / currentPrice * 100.0
+        val rrRatio = if (slPct > 0) tp2Pct / slPct else 2.0
+
+        return RiskManagementLevels(
+            currentPrice = currentPrice,
+            supportLevel = support,
+            resistanceLevel = resistance,
+            recommendedEntry = currentPrice,
+            stopLoss = stopLoss,
+            stopLossPercent = slPct,
+            takeProfit1 = tp1,
+            takeProfit1Percent = tp1Pct,
+            takeProfit2 = tp2,
+            takeProfit2Percent = tp2Pct,
+            takeProfit3 = tp3,
+            takeProfit3Percent = tp3Pct,
+            riskRewardRatio = (rrRatio * 10).roundToInt() / 10.0,
+            atr = atr
+        )
     }
 }

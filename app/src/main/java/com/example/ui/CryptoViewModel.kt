@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.AggTrade
 import com.example.data.model.Candle
 import com.example.data.model.ConnectionStatus
+import com.example.data.model.CryptoNewsItem
 import com.example.data.model.ExchangeSource
+import com.example.data.model.MarketSentiment
 import com.example.data.model.MultiTimeframeSignals
 import com.example.data.model.OrderBookData
 import com.example.data.model.SignalScore
 import com.example.data.model.TechnicalIndicators
 import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
+import com.example.data.model.TimeframePrediction
 import com.example.data.repository.CryptoRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,16 +30,18 @@ enum class TickDirection {
     NONE, UP, DOWN
 }
 
-enum class DashboardTab(val title: String) {
-    CHART_SIGNALS("Chart & Signal"),
-    INDICATORS("Indicators"),
-    RISK_MATRIX("Risk Levels"),
-    ORDER_BOOK("Order Book")
+enum class DashboardTab(val titleArabic: String) {
+    PREDICTIONS("التنبؤات والتوقعات 🎯"),
+    CHART_SIGNALS("الرسم البياني 📊"),
+    INDICATORS("المؤشرات الفنية 📐"),
+    NEWS_SENTIMENT("الأخبار ونبض السوق 📰"),
+    ORDER_BOOK("دفتر الأوامر 📖"),
+    RISK_MATRIX("إدارة المخاطر 🛡️")
 }
 
 data class CryptoUiState(
     val selectedTimeframe: Timeframe = Timeframe.FIVE_MIN,
-    val selectedTab: DashboardTab = DashboardTab.CHART_SIGNALS,
+    val selectedTab: DashboardTab = DashboardTab.PREDICTIONS,
     val activeExchange: ExchangeSource = ExchangeSource.BINANCE,
     val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTING,
     val ticker: TickerData = TickerData(),
@@ -47,17 +52,22 @@ data class CryptoUiState(
     val multiTimeframe: MultiTimeframeSignals = MultiTimeframeSignals(),
     val orderBook: OrderBookData = OrderBookData(),
     val recentTrades: List<AggTrade> = emptyList(),
+    val marketSentiment: MarketSentiment = MarketSentiment(),
+    val newsFeed: List<CryptoNewsItem> = emptyList(),
     val isLoading: Boolean = true,
     val inspectedCandle: Candle? = null,
     val showSignalBreakdown: Boolean = false
-)
+) {
+    val currentPrediction: TimeframePrediction?
+        get() = multiTimeframe.predictionsByTimeframe[selectedTimeframe]
+}
 
 class CryptoViewModel(
     private val repository: CryptoRepository = CryptoRepository()
 ) : ViewModel() {
 
     private val _selectedTimeframe = MutableStateFlow(Timeframe.FIVE_MIN)
-    private val _selectedTab = MutableStateFlow(DashboardTab.CHART_SIGNALS)
+    private val _selectedTab = MutableStateFlow(DashboardTab.PREDICTIONS)
     private val _inspectedCandle = MutableStateFlow<Candle?>(null)
     private val _showSignalBreakdown = MutableStateFlow(false)
 
@@ -76,6 +86,8 @@ class CryptoViewModel(
         repository.multiTimeframeSignals,
         repository.orderBook,
         repository.recentTrades,
+        repository.marketSentiment,
+        repository.newsFeed,
         repository.isLoading,
         _tickDirection,
         _inspectedCandle,
@@ -91,10 +103,12 @@ class CryptoViewModel(
         val mtfSignals = args[7] as MultiTimeframeSignals
         val orderBook = args[8] as OrderBookData
         val trades = args[9] as List<AggTrade>
-        val loading = args[10] as Boolean
-        val tickDir = args[11] as TickDirection
-        val inspected = args[12] as Candle?
-        val showBreakdown = args[13] as Boolean
+        val sentiment = args[10] as MarketSentiment
+        val news = args[11] as List<CryptoNewsItem>
+        val loading = args[12] as Boolean
+        val tickDir = args[13] as TickDirection
+        val inspected = args[14] as Candle?
+        val showBreakdown = args[15] as Boolean
 
         val candles = candlesMap[tf] ?: emptyList()
         val indicators = indicatorsMap[tf] ?: TechnicalIndicators()
@@ -113,6 +127,8 @@ class CryptoViewModel(
             multiTimeframe = mtfSignals,
             orderBook = orderBook,
             recentTrades = trades,
+            marketSentiment = sentiment,
+            newsFeed = news,
             isLoading = loading,
             inspectedCandle = inspected,
             showSignalBreakdown = showBreakdown
@@ -125,41 +141,37 @@ class CryptoViewModel(
 
     init {
         viewModelScope.launch {
-            repository.initialize()
+            repository.initialize(ExchangeSource.BINANCE)
         }
 
-        // Monitor ticker changes for tick animations
+        // Monitor price movement ticks
         viewModelScope.launch {
             repository.ticker.collect { ticker ->
-                if (ticker.price > 0.0 && lastRecordedPrice > 0.0) {
+                if (ticker.price > 0 && lastRecordedPrice > 0) {
                     if (ticker.price > lastRecordedPrice) {
-                        triggerTick(TickDirection.UP)
+                        _tickDirection.value = TickDirection.UP
                     } else if (ticker.price < lastRecordedPrice) {
-                        triggerTick(TickDirection.DOWN)
+                        _tickDirection.value = TickDirection.DOWN
+                    }
+
+                    tickResetJob?.cancel()
+                    tickResetJob = viewModelScope.launch {
+                        delay(600)
+                        _tickDirection.value = TickDirection.NONE
                     }
                 }
-                if (ticker.price > 0.0) {
+                if (ticker.price > 0) {
                     lastRecordedPrice = ticker.price
                 }
             }
         }
     }
 
-    private fun triggerTick(direction: TickDirection) {
-        _tickDirection.value = direction
-        tickResetJob?.cancel()
-        tickResetJob = viewModelScope.launch {
-            delay(400)
-            _tickDirection.value = TickDirection.NONE
-        }
+    fun selectTimeframe(timeframe: Timeframe) {
+        _selectedTimeframe.value = timeframe
     }
 
-    fun setTimeframe(tf: Timeframe) {
-        _selectedTimeframe.value = tf
-        _inspectedCandle.value = null
-    }
-
-    fun setTab(tab: DashboardTab) {
+    fun selectTab(tab: DashboardTab) {
         _selectedTab.value = tab
     }
 
@@ -167,7 +179,7 @@ class CryptoViewModel(
         repository.switchExchange(exchange)
     }
 
-    fun refresh() {
+    fun refreshData() {
         repository.refreshHistoricalData()
     }
 

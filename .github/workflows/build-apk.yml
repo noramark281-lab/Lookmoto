@@ -2,13 +2,11 @@ name: Build Lookmoto APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
-# contents: write is required so the workflow can publish the built APK as a
-# GitHub Release asset, which gives a stable, public, direct download link.
 permissions:
   contents: write
 
@@ -32,10 +30,6 @@ jobs:
       - name: Install required Android SDK packages
         shell: bash
         run: |
-          # Use the SDK preinstalled on the GitHub-hosted runner instead of
-          # android-actions/setup-android: that action re-downloads cmdline
-          # tools and fails on non-interactive license acceptance on this
-          # runner image. The preinstalled sdkmanager handles licenses fine.
           ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
@@ -46,12 +40,8 @@ jobs:
           fi
           echo "Using sdkmanager: $SDKMANAGER"
 
-          # Accept all licenses non-interactively.
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
-          # compileSdk is 36 (see app/build.gradle.kts), so android-36 and
-          # build-tools 36.0.0 MUST be installed. android-35 is kept for
-          # targetSdk tooling compatibility.
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install \
             "platform-tools" \
             "platforms;android-36" \
@@ -61,10 +51,6 @@ jobs:
       - name: Generate debug keystore
         shell: bash
         run: |
-          # The debug build type signs with a custom keystore at the project
-          # root (${rootDir}/debug.keystore). That file is git-ignored and is
-          # not committed, so it must be created in CI with the exact
-          # alias/passwords expected by app/build.gradle.kts.
           if [ ! -f debug.keystore ]; then
             keytool -genkeypair -v \
               -keystore debug.keystore \
@@ -75,36 +61,67 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Decode signing keystore if provided
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding upload keystore from secret..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> "$GITHUB_ENV"
+          fi
+
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        # --no-configuration-cache avoids first-run incompatibilities with the
-        # google-services / secrets Gradle plugins that would otherwise fail
-        # the configuration-cache enabled build.
-        run: ./gradlew --no-daemon --stacktrace --no-configuration-cache clean assembleDebug
+      - name: Build Android APK
+        env:
+          STORE_PASSWORD: ${{ secrets.CM_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.CM_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CM_KEY_ALIAS }}
+        run: |
+          if [ -f "my-upload-key.jks" ]; then
+            echo "Building Release and Debug APKs..."
+            ./gradlew --no-daemon --stacktrace --no-configuration-cache clean assembleRelease assembleDebug || ./gradlew --no-daemon --stacktrace --no-configuration-cache assembleDebug
+          else
+            echo "Building Debug APK..."
+            ./gradlew --no-daemon --stacktrace --no-configuration-cache clean assembleDebug
+          fi
 
-      - name: Locate generated APK
+      - name: Locate and prepare generated APKs
         id: apk
         shell: bash
         run: |
-          APK_PATH="$(find app/build/outputs/apk -type f -name '*.apk' \
-            ! -name '*-androidTest.apk' | head -n 1)"
+          mkdir -p release
+          RELEASE_APK="$(find app/build/outputs/apk/release -type f -name '*.apk' 2>/dev/null | head -n 1)"
+          DEBUG_APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' 2>/dev/null | head -n 1)"
 
-          if [ -z "$APK_PATH" ]; then
-            echo "::error::No APK was generated"
-            exit 1
+          if [ -n "$RELEASE_APK" ]; then
+            echo "Found Release APK: $RELEASE_APK"
+            cp "$RELEASE_APK" release/Lookmoto-release.apk
           fi
 
-          mkdir -p release
-          cp "$APK_PATH" release/Lookmoto-debug.apk
-          echo "path=release/Lookmoto-debug.apk" >> "$GITHUB_OUTPUT"
+          if [ -n "$DEBUG_APK" ]; then
+            echo "Found Debug APK: $DEBUG_APK"
+            cp "$DEBUG_APK" release/Lookmoto-debug.apk
+          fi
 
-      - name: Upload APK artifact
+          if [ ! -f release/Lookmoto-release.apk ] && [ ! -f release/Lookmoto-debug.apk ]; then
+            ANY_APK="$(find app/build/outputs/apk -type f -name '*.apk' ! -name '*-androidTest.apk' | head -n 1)"
+            if [ -n "$ANY_APK" ]; then
+              cp "$ANY_APK" release/Lookmoto-app.apk
+            else
+              echo "::error::No APK found"; exit 1
+            fi
+          fi
+          ls -la release/
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Lookmoto-debug-apk
-          path: ${{ steps.apk.outputs.path }}
+          name: Lookmoto-APKs
+          path: release/*.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -115,9 +132,24 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Lookmoto APK build ${{ github.run_number }}
           body: |
-            Automated debug APK build.
-            Direct download: the Lookmoto-debug.apk asset attached below.
-          files: release/Lookmoto-debug.apk
+            ## Lookmoto - BTC Signal Pro Android Release
+            
+            ### الميزات والتحديثات المشمولة في هذا الإصدار:
+            - واجهة كاملة باللغة العربية مع دعم التخصيص والمظهر الليلي الداكن المتطور.
+            - محرك تنبؤات احتمالية لحظية للارتفاع والهبوط لزوج BTC/USDT لجميع الأطر الزمنية:
+              - 1 دقيقة (1m)
+              - 5 دقائق (5m)
+              - 10 دقائق (10m)
+              - 15 دقيقة (15m)
+              - 30 دقيقة (30m)
+              - 1 ساعة (1h)
+            - أهداف سعرية دقيقة ومستويات وقف الخسارة المقترحة ونطاق التذبذب المتوقع.
+            - الربط اللحظي بمواقع الأخبار العالمية ونبض السوق ومؤشر الخوف والطمع (Fear & Greed Index).
+            - بث فوري لعمق دفتر الأوامر والصفقات المجمعة عبر خوادم Binance و MEXC WebSockets.
+            
+            ### روابط التحميل المباشر للـ APK:
+            حمل ملف الـ APK مباشرة من قائمة الأصول (Assets) المرفقة أدناه.
+          files: release/*.apk
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

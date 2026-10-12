@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -96,7 +94,7 @@ fun OrderBookDepthCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Live Order Book Depth",
+                    text = "عمق دفتر الأوامر اللحظي المباشر",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -104,13 +102,13 @@ fun OrderBookDepthCard(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Spread: $${String.format("%.2f", orderBook.spread)}",
+                        text = "الفارق: $${String.format("%.2f", orderBook.spread)}",
                         fontSize = 11.sp,
                         color = CryptoYellow,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Ratio: ${String.format("%.2f", orderBook.bidAskRatio)}x",
+                        text = "الطلب/العرض: ${String.format("%.2f", orderBook.bidAskRatio)}x",
                         fontSize = 11.sp,
                         color = if (orderBook.bidAskRatio >= 1.0) CryptoGreen else CryptoRed,
                         fontWeight = FontWeight.Bold
@@ -125,11 +123,11 @@ fun OrderBookDepthCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Bid Price", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
-                Text("Bid Size", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                Text("طلب شراء", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
+                Text("الكمية", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Ask Price", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
-                Text("Ask Size", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                Text("عرض بيع", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
+                Text("الكمية", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -242,13 +240,13 @@ fun RecentTradesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "High-Frequency Aggregate Trades",
+                    text = "شريط الصفقات المجمعة الفورية",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "Live Tape",
+                    text = "بث مباشر",
                     fontSize = 10.sp,
                     color = CryptoCyan,
                     fontWeight = FontWeight.SemiBold
@@ -262,10 +260,10 @@ fun RecentTradesCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Time", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
-                Text("Price (USDT)", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1.4f), textAlign = TextAlign.End)
-                Text("Size (BTC)", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1.2f), textAlign = TextAlign.End)
-                Text("Side", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
+                Text("الوقت", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1f))
+                Text("السعر (USDT)", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1.4f), textAlign = TextAlign.End)
+                Text("الكمية (BTC)", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(1.2f), textAlign = TextAlign.End)
+                Text("النوع", fontSize = 10.sp, color = TextMuted, modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -277,7 +275,7 @@ fun RecentTradesCard(
                         .height(80.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Streaming trade executions...", fontSize = 11.sp, color = TextMuted)
+                    Text("جارٍ استقبال تدفق الصفقات...", fontSize = 11.sp, color = TextMuted)
                 }
             } else {
                 displayTrades.forEach { trade ->
@@ -323,7 +321,7 @@ fun RecentTradesCard(
                                     .padding(horizontal = 4.dp, vertical = 1.dp)
                             ) {
                                 Text(
-                                    text = if (trade.isBuyTaker) "BUY" else "SELL",
+                                    text = if (trade.isBuyTaker) "شراء" else "بيع",
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (trade.isBuyTaker) CryptoGreen else CryptoRed
