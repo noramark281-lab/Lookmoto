@@ -2,6 +2,9 @@ package com.example
 
 import com.example.data.engine.IndicatorEngine
 import com.example.data.model.Candle
+import com.example.data.model.DerivativesFlowData
+import com.example.data.model.MarketSentiment
+import com.example.data.model.OrderBookData
 import com.example.data.model.Timeframe
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -12,7 +15,6 @@ class IndicatorEngineTest {
 
     @Test
     fun testRsiCalculation() {
-        // Generating price series with upward momentum
         val prices = mutableListOf(100.0)
         for (i in 1..25) {
             prices.add(prices.last() + (if (i % 3 == 0) -1.0 else 2.5))
@@ -84,5 +86,49 @@ class IndicatorEngineTest {
         assertEquals(100 - signal.probabilityBullish, signal.probabilityBearish)
         assertNotNull(signal.riskManagement)
         assertTrue(signal.riskManagement!!.takeProfit1 > signal.riskManagement!!.currentPrice)
+    }
+
+    @Test
+    fun testTradingViewGaugeAndFlashReport() {
+        val candles = mutableListOf<Candle>()
+        var price = 66000.0
+        val baseTime = System.currentTimeMillis() - 7200_000
+
+        for (i in 0 until 50) {
+            price += 80.0
+            val t = baseTime + (i * 60_000)
+            candles.add(
+                Candle(
+                    openTime = t,
+                    open = price - 40.0,
+                    high = price + 60.0,
+                    low = price - 50.0,
+                    close = price,
+                    volume = 15.0,
+                    closeTime = t + 60_000
+                )
+            )
+        }
+
+        val indicators = IndicatorEngine.calculateIndicators(candles)
+        val gauge = IndicatorEngine.calculateTradingViewGauge(price, indicators)
+        assertNotNull(gauge)
+        assertTrue(gauge.buyCount > 0)
+
+        val signal = IndicatorEngine.evaluateSignal(Timeframe.ONE_HOUR, candles, indicators)
+        val flashReport = IndicatorEngine.generateInstantFlashReport(
+            timeframe = Timeframe.ONE_HOUR,
+            currentPrice = price,
+            score = signal,
+            indicators = indicators,
+            derivativesFlow = DerivativesFlowData(),
+            marketSentiment = MarketSentiment(),
+            tvGauge = gauge
+        )
+
+        assertNotNull(flashReport)
+        assertTrue(flashReport.probabilityAccuracy >= 75)
+        assertTrue(flashReport.targetPrice > 0.0)
+        assertTrue(flashReport.stopLoss > 0.0)
     }
 }

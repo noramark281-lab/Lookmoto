@@ -95,7 +95,8 @@ data class TimeframePrediction(
     val expectedPriceRangeHigh: Double,
     val confidenceArabic: String, // "مرتفعة جداً (92%)"
     val technicalSummaryArabic: String,
-    val keyIndicatorsArabic: List<String>
+    val keyIndicatorsArabic: List<String>,
+    val flashReport: InstantFlashReport? = null
 )
 
 data class SignalScore(
@@ -114,6 +115,10 @@ data class SignalScore(
 data class MultiTimeframeSignals(
     val signalsByTimeframe: Map<Timeframe, SignalScore> = emptyMap(),
     val predictionsByTimeframe: Map<Timeframe, TimeframePrediction> = emptyMap(),
+    val flashReportsByTimeframe: Map<Timeframe, InstantFlashReport> = emptyMap(),
+    val derivativesFlow: DerivativesFlowData = DerivativesFlowData(),
+    val tradingViewGauge: TradingViewGauge = TradingViewGauge(),
+    val bestOverallInstantReport: InstantFlashReport? = null,
     val overallBullishProbability: Int = 50,
     val overallSignalType: SignalType = SignalType.NEUTRAL,
     val overallSentimentArabic: String = "تحليل متزن متعدد الأطر والمصادر"

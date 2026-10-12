@@ -59,16 +59,19 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.ConnectionStatus
 import com.example.data.model.ExchangeSource
 import com.example.data.model.SignalScore
-import com.example.data.model.SignalType
 import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
+import com.example.ui.components.BestReportView
 import com.example.ui.components.CandleStickChart
+import com.example.ui.components.ConnectionHealthBar
+import com.example.ui.components.DerivativesFlowCard
 import com.example.ui.components.IndicatorDashboard
 import com.example.ui.components.NewsSentimentView
 import com.example.ui.components.OrderBookAndTradesView
 import com.example.ui.components.PredictionsView
 import com.example.ui.components.RiskMatrixCard
 import com.example.ui.components.SignalBreakdownDialog
+import com.example.ui.components.TradingViewGaugeCard
 import com.example.ui.theme.CryptoBgDark
 import com.example.ui.theme.CryptoCardBorder
 import com.example.ui.theme.CryptoCardDark
@@ -82,9 +85,6 @@ import com.example.ui.theme.CryptoYellow
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun CryptoDashboardScreen(
@@ -114,6 +114,11 @@ fun CryptoDashboardScreen(
                 onSwitchExchange = { viewModel.switchExchange(it) },
                 onRefresh = { viewModel.refreshData() }
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Multi-Exchange Heartbeat & Outage Alert Bar
+            ConnectionHealthBar(heartbeat = state.heartbeat)
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -154,7 +159,7 @@ fun CryptoDashboardScreen(
                     ) {
                         CircularProgressIndicator(color = CryptoCyan)
                         Text(
-                            text = "جارٍ جلب البيانات الحية وربط المنصات...",
+                            text = "جارٍ ربط وتجميع بيانات المنصات العالمية...",
                             fontSize = 12.sp,
                             color = TextSecondary
                         )
@@ -162,6 +167,15 @@ fun CryptoDashboardScreen(
                 }
             } else {
                 when (state.selectedTab) {
+                    DashboardTab.BEST_REPORT -> {
+                        BestReportView(
+                            multiSignals = state.multiTimeframe,
+                            selectedTimeframe = state.selectedTimeframe,
+                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0,
+                            onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                        )
+                    }
+
                     DashboardTab.PREDICTIONS -> {
                         PredictionsView(
                             multiSignals = state.multiTimeframe,
@@ -171,27 +185,38 @@ fun CryptoDashboardScreen(
                         )
                     }
 
+                    DashboardTab.TRADINGVIEW_GAUGES -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TradingViewGaugeCard(gauge = state.tradingViewGauge)
+                            IndicatorDashboard(
+                                indicators = state.indicators,
+                                currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0
+                            )
+                        }
+                    }
+
+                    DashboardTab.DERIVATIVES_COINGLASS -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            DerivativesFlowCard(derivatives = state.derivativesFlow)
+                            OrderBookAndTradesView(
+                                orderBook = state.orderBook,
+                                recentTrades = state.recentTrades
+                            )
+                        }
+                    }
+
                     DashboardTab.CHART_SIGNALS -> {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // Signal Bar Card
                             HeroSignalBanner(
                                 signal = state.currentSignal,
                                 onOpenBreakdown = { viewModel.toggleSignalBreakdown(true) }
                             )
 
-                            // Interactive Candle Chart
                             CandleStickChart(
                                 candles = state.candles,
                                 onCandleSelected = { viewModel.inspectCandle(it) }
                             )
                         }
-                    }
-
-                    DashboardTab.INDICATORS -> {
-                        IndicatorDashboard(
-                            indicators = state.indicators,
-                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0
-                        )
                     }
 
                     DashboardTab.NEWS_SENTIMENT -> {
@@ -321,7 +346,7 @@ private fun TopDashboardHeader(
                     )
                     Text(
                         text = activeExchange.displayName,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
                     )
@@ -469,11 +494,11 @@ private fun TimeframeSelectorRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("timeframe_selector_row"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Timeframe.values().forEach { tf ->
             val isSelected = tf == selectedTimeframe
-            val bg = if (isSelected) CryptoCyan.copy(alpha = 0.18f) else CryptoCardDark
+            val bg = if (isSelected) CryptoCyan.copy(alpha = 0.2f) else CryptoCardDark
             val border = if (isSelected) CryptoCyan else CryptoCardBorder
             val textCol = if (isSelected) CryptoCyan else TextMuted
 
@@ -488,7 +513,7 @@ private fun TimeframeSelectorRow(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = tf.labelArabic,
+                    text = tf.shortLabel,
                     fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = textCol

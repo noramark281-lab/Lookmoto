@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.AggTrade
 import com.example.data.model.Candle
+import com.example.data.model.ConnectionHeartbeat
 import com.example.data.model.ConnectionStatus
 import com.example.data.model.CryptoNewsItem
+import com.example.data.model.DerivativesFlowData
 import com.example.data.model.ExchangeSource
+import com.example.data.model.InstantFlashReport
 import com.example.data.model.MarketSentiment
 import com.example.data.model.MultiTimeframeSignals
 import com.example.data.model.OrderBookData
@@ -15,13 +18,13 @@ import com.example.data.model.TechnicalIndicators
 import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
 import com.example.data.model.TimeframePrediction
+import com.example.data.model.TradingViewGauge
 import com.example.data.repository.CryptoRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,19 +34,22 @@ enum class TickDirection {
 }
 
 enum class DashboardTab(val titleArabic: String) {
+    BEST_REPORT("التقرير اللحظي الأفضل ⚡"),
     PREDICTIONS("التنبؤات والتوقعات 🎯"),
-    CHART_SIGNALS("الرسم البياني 📊"),
-    INDICATORS("المؤشرات الفنية 📐"),
-    NEWS_SENTIMENT("الأخبار ونبض السوق 📰"),
+    TRADINGVIEW_GAUGES("مؤشرات تريدنج فيو 📐"),
+    DERIVATIVES_COINGLASS("سيولة كوين جلاس 📊"),
+    CHART_SIGNALS("الرسم البياني 📈"),
+    NEWS_SENTIMENT("أخبار Tree News 📰"),
     ORDER_BOOK("دفتر الأوامر 📖"),
     RISK_MATRIX("إدارة المخاطر 🛡️")
 }
 
 data class CryptoUiState(
     val selectedTimeframe: Timeframe = Timeframe.FIVE_MIN,
-    val selectedTab: DashboardTab = DashboardTab.PREDICTIONS,
+    val selectedTab: DashboardTab = DashboardTab.BEST_REPORT,
     val activeExchange: ExchangeSource = ExchangeSource.BINANCE,
     val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTING,
+    val heartbeat: ConnectionHeartbeat = ConnectionHeartbeat(),
     val ticker: TickerData = TickerData(),
     val tickDirection: TickDirection = TickDirection.NONE,
     val candles: List<Candle> = emptyList(),
@@ -54,12 +60,17 @@ data class CryptoUiState(
     val recentTrades: List<AggTrade> = emptyList(),
     val marketSentiment: MarketSentiment = MarketSentiment(),
     val newsFeed: List<CryptoNewsItem> = emptyList(),
+    val derivativesFlow: DerivativesFlowData = DerivativesFlowData(),
+    val tradingViewGauge: TradingViewGauge = TradingViewGauge(),
     val isLoading: Boolean = true,
     val inspectedCandle: Candle? = null,
     val showSignalBreakdown: Boolean = false
 ) {
     val currentPrediction: TimeframePrediction?
         get() = multiTimeframe.predictionsByTimeframe[selectedTimeframe]
+
+    val currentFlashReport: InstantFlashReport?
+        get() = multiTimeframe.flashReportsByTimeframe[selectedTimeframe] ?: multiTimeframe.bestOverallInstantReport
 }
 
 class CryptoViewModel(
@@ -67,7 +78,7 @@ class CryptoViewModel(
 ) : ViewModel() {
 
     private val _selectedTimeframe = MutableStateFlow(Timeframe.FIVE_MIN)
-    private val _selectedTab = MutableStateFlow(DashboardTab.PREDICTIONS)
+    private val _selectedTab = MutableStateFlow(DashboardTab.BEST_REPORT)
     private val _inspectedCandle = MutableStateFlow<Candle?>(null)
     private val _showSignalBreakdown = MutableStateFlow(false)
 
@@ -80,6 +91,7 @@ class CryptoViewModel(
         _selectedTab,
         repository.activeExchange,
         repository.getConnectionStatus(),
+        repository.heartbeat,
         repository.ticker,
         repository.candlesFlow,
         repository.indicatorsFlow,
@@ -88,27 +100,24 @@ class CryptoViewModel(
         repository.recentTrades,
         repository.marketSentiment,
         repository.newsFeed,
-        repository.isLoading,
-        _tickDirection,
-        _inspectedCandle,
-        _showSignalBreakdown
+        repository.derivativesFlow,
+        repository.isLoading
     ) { args ->
         val tf = args[0] as Timeframe
         val tab = args[1] as DashboardTab
         val exchange = args[2] as ExchangeSource
         val status = args[3] as ConnectionStatus
-        val ticker = args[4] as TickerData
-        val candlesMap = args[5] as Map<Timeframe, List<Candle>>
-        val indicatorsMap = args[6] as Map<Timeframe, TechnicalIndicators>
-        val mtfSignals = args[7] as MultiTimeframeSignals
-        val orderBook = args[8] as OrderBookData
-        val trades = args[9] as List<AggTrade>
-        val sentiment = args[10] as MarketSentiment
-        val news = args[11] as List<CryptoNewsItem>
-        val loading = args[12] as Boolean
-        val tickDir = args[13] as TickDirection
-        val inspected = args[14] as Candle?
-        val showBreakdown = args[15] as Boolean
+        val heartbeat = args[4] as ConnectionHeartbeat
+        val ticker = args[5] as TickerData
+        val candlesMap = args[6] as Map<Timeframe, List<Candle>>
+        val indicatorsMap = args[7] as Map<Timeframe, TechnicalIndicators>
+        val mtfSignals = args[8] as MultiTimeframeSignals
+        val orderBook = args[9] as OrderBookData
+        val trades = args[10] as List<AggTrade>
+        val sentiment = args[11] as MarketSentiment
+        val news = args[12] as List<CryptoNewsItem>
+        val deriv = args[13] as DerivativesFlowData
+        val loading = args[14] as Boolean
 
         val candles = candlesMap[tf] ?: emptyList()
         val indicators = indicatorsMap[tf] ?: TechnicalIndicators()
@@ -119,8 +128,9 @@ class CryptoViewModel(
             selectedTab = tab,
             activeExchange = exchange,
             connectionStatus = status,
+            heartbeat = heartbeat,
             ticker = ticker,
-            tickDirection = tickDir,
+            tickDirection = _tickDirection.value,
             candles = candles,
             indicators = indicators,
             currentSignal = currentSignal,
@@ -129,9 +139,11 @@ class CryptoViewModel(
             recentTrades = trades,
             marketSentiment = sentiment,
             newsFeed = news,
+            derivativesFlow = deriv,
+            tradingViewGauge = mtfSignals.tradingViewGauge,
             isLoading = loading,
-            inspectedCandle = inspected,
-            showSignalBreakdown = showBreakdown
+            inspectedCandle = _inspectedCandle.value,
+            showSignalBreakdown = _showSignalBreakdown.value
         )
     }.stateIn(
         scope = viewModelScope,

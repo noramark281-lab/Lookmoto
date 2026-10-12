@@ -1,8 +1,9 @@
 package com.example.data.model
 
 enum class ExchangeSource(val displayName: String, val code: String) {
-    BINANCE("منصة بينانس (Binance)", "BINANCE"),
-    MEXC("منصة إم إي إكس سي (MEXC)", "MEXC")
+    BINANCE("منصة بينانس (Binance Spot)", "BINANCE"),
+    MEXC("منصة إم إي إكس سي (MEXC Spot)", "MEXC"),
+    BYBIT("منصة بايبت (Bybit Spot)", "BYBIT")
 }
 
 enum class Timeframe(
@@ -10,14 +11,16 @@ enum class Timeframe(
     val shortLabel: String,
     val binanceInterval: String,
     val mexcInterval: String,
+    val bybitInterval: String,
     val durationMs: Long
 ) {
-    ONE_MIN("1 دقيقة", "1m", "1m", "1m", 60_000L),
-    FIVE_MIN("5 دقائق", "5m", "5m", "5m", 300_000L),
-    TEN_MIN("10 دقائق", "10m", "15m", "15m", 600_000L),
-    FIFTEEN_MIN("15 دقيقة", "15m", "15m", "15m", 900_000L),
-    THIRTY_MIN("30 دقيقة", "30m", "30m", "30m", 1_800_000L),
-    ONE_HOUR("1 ساعة", "1h", "1h", "1h", 3_600_000L)
+    ONE_MIN("1 دقيقة", "1m", "1m", "1m", "1", 60_000L),
+    FIVE_MIN("5 دقائق", "5m", "5m", "5m", "5", 300_000L),
+    TEN_MIN("10 دقائق", "10m", "15m", "15m", "15", 600_000L),
+    FIFTEEN_MIN("15 دقيقة (ربع ساعة)", "15m", "15m", "15m", "15", 900_000L),
+    THIRTY_MIN("30 دقيقة (نصف ساعة)", "30m", "30m", "30m", "30", 1_800_000L),
+    ONE_HOUR("1 ساعة", "1h", "1h", "1h", "60", 3_600_000L),
+    ONE_DAY("1 يوم كامل", "1d", "1d", "1d", "D", 86_400_000L)
 }
 
 data class Candle(
@@ -86,6 +89,16 @@ enum class ConnectionStatus(val labelArabic: String) {
     ERROR("خطأ في الاتصال بالشبكة")
 }
 
+data class ConnectionHeartbeat(
+    val exchange: ExchangeSource = ExchangeSource.BINANCE,
+    val latencyMs: Long = 26L,
+    val lastOfficialTickTime: Long = System.currentTimeMillis(),
+    val isStale: Boolean = false,
+    val packetCount: Long = 0L,
+    val reconnectCount: Int = 0,
+    val statusMessageArabic: String = "الاتصال الرسمي مستقر وسريع دون انقطاع"
+)
+
 enum class NewsSentiment(val labelArabic: String, val badgeColorHex: Long) {
     BULLISH("إيجابي صاعد 🟢", 0xFF00E676),
     BEARISH("سلبي هابط 🔴", 0xFFFF3D57),
@@ -100,16 +113,53 @@ data class CryptoNewsItem(
     val sourceUrl: String,
     val publishedTimeMs: Long,
     val sentiment: NewsSentiment,
-    val summaryArabic: String
+    val summaryArabic: String,
+    val isFlashWire: Boolean = false
 )
 
 data class MarketSentiment(
-    val fearAndGreedIndex: Int = 62,
+    val fearAndGreedIndex: Int = 64,
     val fearAndGreedLabelArabic: String = "طمع معتدل (تفاؤل بالصعود)",
-    val newsBullishPercentage: Int = 68,
-    val newsBearishPercentage: Int = 32,
-    val positiveNewsCount: Int = 12,
+    val newsBullishPercentage: Int = 70,
+    val newsBearishPercentage: Int = 30,
+    val positiveNewsCount: Int = 14,
     val negativeNewsCount: Int = 4,
-    val totalAnalyzedArticles: Int = 20,
+    val totalAnalyzedArticles: Int = 22,
     val overallSentimentArabic: String = "اتجاه عام إيجابي داعم لارتفاع البيتكوين"
+)
+
+data class DerivativesFlowData(
+    val fundingRatePercent: Double = 0.0100, // standard 0.01%
+    val fundingRateStatusArabic: String = "معدل تمويل متوازن (0.010%) - لا ضغوط تصفية فورية",
+    val openInterestEstimatedUsd: String = "$34.8B",
+    val openInterestDelta24h: Double = +2.8,
+    val liquidationDominanceArabic: String = "تصفية مراكز البيع (Short Squeeze) تدعم استمرار الصعود",
+    val shortLiquidationEstimatedUsd: String = "$68.4M",
+    val longLiquidationEstimatedUsd: String = "$18.2M",
+    val bidLiquidityWallPrice: Double = 0.0,
+    val askLiquidityWallPrice: Double = 0.0
+)
+
+data class TradingViewGauge(
+    val summaryRatingArabic: String = "شراء قوي (Strong Buy)",
+    val oscillatorsRatingArabic: String = "شراء (Buy)",
+    val movingAveragesRatingArabic: String = "شراء قوي (Strong Buy)",
+    val buyCount: Int = 16,
+    val neutralCount: Int = 4,
+    val sellCount: Int = 2
+)
+
+data class InstantFlashReport(
+    val timeframe: Timeframe,
+    val bestReportTitleArabic: String,
+    val expectedDirectionArabic: String, // "ارتفاع البيتكوين مقابل USDT 📈"
+    val isBullish: Boolean,
+    val probabilityAccuracy: Int, // e.g. 91%
+    val targetPrice: Double,
+    val stopLoss: Double,
+    val expectedPriceRangeLow: Double,
+    val expectedPriceRangeHigh: Double,
+    val primarySourceConsensusArabic: String,
+    val institutionalInsightArabic: String,
+    val reliabilityRatingArabic: String
 )

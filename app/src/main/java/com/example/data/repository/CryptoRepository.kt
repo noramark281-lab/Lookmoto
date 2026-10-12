@@ -3,8 +3,10 @@ package com.example.data.repository
 import com.example.data.engine.IndicatorEngine
 import com.example.data.model.AggTrade
 import com.example.data.model.Candle
+import com.example.data.model.ConnectionHeartbeat
 import com.example.data.model.ConnectionStatus
 import com.example.data.model.CryptoNewsItem
+import com.example.data.model.DerivativesFlowData
 import com.example.data.model.ExchangeSource
 import com.example.data.model.MarketSentiment
 import com.example.data.model.MultiTimeframeSignals
@@ -14,7 +16,6 @@ import com.example.data.model.SignalType
 import com.example.data.model.TechnicalIndicators
 import com.example.data.model.TickerData
 import com.example.data.model.Timeframe
-import com.example.data.model.TimeframePrediction
 import com.example.data.network.CryptoRestClient
 import com.example.data.network.CryptoWebSocketClient
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +41,7 @@ class CryptoRepository(
     val activeExchange: StateFlow<ExchangeSource> = _activeExchange.asStateFlow()
 
     private val _connectionStatus = webSocketClient.connectionStatus
+    val heartbeat: StateFlow<ConnectionHeartbeat> = webSocketClient.heartbeat
 
     private val _ticker = MutableStateFlow(TickerData())
     val ticker: StateFlow<TickerData> = _ticker.asStateFlow()
@@ -50,12 +52,14 @@ class CryptoRepository(
     private val _recentTrades = MutableStateFlow<List<AggTrade>>(emptyList())
     val recentTrades: StateFlow<List<AggTrade>> = _recentTrades.asStateFlow()
 
-    // News and Market Sentiment
     private val _marketSentiment = MutableStateFlow(MarketSentiment())
     val marketSentiment: StateFlow<MarketSentiment> = _marketSentiment.asStateFlow()
 
     private val _newsFeed = MutableStateFlow<List<CryptoNewsItem>>(emptyList())
     val newsFeed: StateFlow<List<CryptoNewsItem>> = _newsFeed.asStateFlow()
+
+    private val _derivativesFlow = MutableStateFlow(DerivativesFlowData())
+    val derivativesFlow: StateFlow<DerivativesFlowData> = _derivativesFlow.asStateFlow()
 
     // Multi-timeframe Candles map
     private val candlesMap = mutableMapOf<Timeframe, MutableList<Candle>>()
@@ -123,7 +127,7 @@ class CryptoRepository(
             }
         }
 
-        // 2. Fetch News and Sentiment
+        // 2. Fetch News, Sentiment, and CoinGlass derivatives
         refreshNewsAndSentiment()
 
         // 3. Initial calculation of all indicators and signals
@@ -143,6 +147,12 @@ class CryptoRepository(
         val newsResult = restClient.fetchCryptoNews()
         newsResult.onSuccess { news ->
             _newsFeed.value = news
+        }
+
+        val currentPrice = _ticker.value.price.takeIf { it > 0 } ?: 65000.0
+        val derivResult = restClient.fetchDerivativesFlow(currentPrice)
+        derivResult.onSuccess { deriv ->
+            _derivativesFlow.value = deriv
         }
     }
 
@@ -226,6 +236,7 @@ class CryptoRepository(
         val newSignals = mutableMapOf<Timeframe, SignalScore>()
         val currentBook = _orderBook.value
         val currentSentiment = _marketSentiment.value
+        val currentDeriv = _derivativesFlow.value
         val currentPrice = _ticker.value.price.takeIf { it > 0 } ?: snapshot[Timeframe.FIVE_MIN]?.lastOrNull()?.close ?: 65000.0
 
         Timeframe.values().forEach { tf ->
@@ -239,29 +250,38 @@ class CryptoRepository(
 
         _indicatorsFlow.value = newIndicators
 
-        // Comprehensive multi-timeframe predictions
-        val predictions = IndicatorEngine.generateMultiTimeframePredictions(
+        // Comprehensive multi-timeframe predictions & Flash Reports
+        val (predictions, flashReports) = IndicatorEngine.generateMultiTimeframePredictions(
             currentPrice = currentPrice,
             candlesMap = snapshot,
             indicatorsMap = newIndicators,
             orderBook = currentBook,
+            derivativesFlow = currentDeriv,
             marketSentiment = currentSentiment
         )
 
-        // Weighted consensus:
-        // 1m: 10%, 5m: 20%, 10m: 15%, 15m: 20%, 30m: 20%, 1h: 15%
+        // Select the single Best Overall Instant Report (highest confluence, preferably 5m or 15m)
+        val bestReport = flashReports[Timeframe.FIVE_MIN] ?: flashReports.values.firstOrNull()
+
+        // TradingView Consensus Gauge for current primary timeframe
+        val currentTfIndicators = newIndicators[Timeframe.FIVE_MIN] ?: TechnicalIndicators()
+        val tvGauge = IndicatorEngine.calculateTradingViewGauge(currentPrice, currentTfIndicators)
+
+        // Weighted consensus
         val score1m = newSignals[Timeframe.ONE_MIN]?.probabilityBullish ?: 50
         val score5m = newSignals[Timeframe.FIVE_MIN]?.probabilityBullish ?: 50
         val score15m = newSignals[Timeframe.FIFTEEN_MIN]?.probabilityBullish ?: 50
         val score30m = newSignals[Timeframe.THIRTY_MIN]?.probabilityBullish ?: 50
         val score1h = newSignals[Timeframe.ONE_HOUR]?.probabilityBullish ?: 50
+        val score1d = newSignals[Timeframe.ONE_DAY]?.probabilityBullish ?: 50
 
         val weightedBullish = (
-            (score1m * 0.15) +
-            (score5m * 0.25) +
+            (score1m * 0.10) +
+            (score5m * 0.20) +
             (score15m * 0.25) +
             (score30m * 0.20) +
-            (score1h * 0.15)
+            (score1h * 0.15) +
+            (score1d * 0.10)
         ).roundToInt()
 
         val overallSignal = when {
@@ -273,15 +293,19 @@ class CryptoRepository(
         }
 
         val overallSentimentArabic = when {
-            weightedBullish >= 65 -> "إجماع قوي لصالح ارتفاع البيتكوين عبر جميع الأطر الزمنية ومنصات التداول"
-            weightedBullish >= 53 -> "ميل إيجابي معتدل مع تماسك قوي لدفتر الأوامر والسيولة اللحظية"
+            weightedBullish >= 65 -> "إجماع موحد قوي لصالح ارتفاع البيتكوين عبر جميع الأطر ومنصات التحليل العالمية"
+            weightedBullish >= 53 -> "ميل إيجابي معتدل مع تماسك قوي لدفتر الأوامر والسيولة اللحظية ومعدلات التمويل"
             weightedBullish in 47..52 -> "حركة عرضية وترقب لكسر مستويات الدعم أو المقاومة الحالية"
-            else -> "ضغط بيعي لحظي يتطلب الحذر وإدارة المخاطر عند التداول"
+            else -> "ضغط بيعي وتصحيح لحظي يتطلب الحذر وإدارة المخاطر عند التداول"
         }
 
         _multiTimeframeSignals.value = MultiTimeframeSignals(
             signalsByTimeframe = newSignals,
             predictionsByTimeframe = predictions,
+            flashReportsByTimeframe = flashReports,
+            derivativesFlow = currentDeriv,
+            tradingViewGauge = tvGauge,
+            bestOverallInstantReport = bestReport,
             overallBullishProbability = weightedBullish,
             overallSignalType = overallSignal,
             overallSentimentArabic = overallSentimentArabic
