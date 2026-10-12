@@ -7,14 +7,16 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# contents: write is required so the workflow can publish the built APK as a
+# GitHub Release asset, which gives a stable, public, direct download link.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -27,60 +29,52 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Configure Android SDK
-        shell: bash
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
         run: |
-          if [ -z "${ANDROID_HOME:-}" ]; then
-            echo "::error::ANDROID_HOME is not set"
-            exit 1
-          fi
-
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager 2>/dev/null \
-            | sort -V | tail -n 1)"
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager not found"
-            exit 1
-          fi
-
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-
-      - name: Install Android SDK packages
-        run: |
-          yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" --install \
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          # compileSdk is 36 (see app/build.gradle.kts), so android-36 and
+          # build-tools 36.0.0 MUST be installed. android-35 is kept for
+          # targetSdk tooling compatibility.
+          sdkmanager --install \
             "platform-tools" \
+            "platforms;android-36" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "build-tools;36.0.0"
 
-      - name: Locate Gradle project
-        id: gradle-project
+      - name: Generate debug keystore
         shell: bash
         run: |
-          if [ -f "./gradlew" ]; then
-            echo "dir=." >> "$GITHUB_OUTPUT"
-          elif [ -f "./android/gradlew" ]; then
-            echo "dir=android" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Gradle wrapper not found"
-            exit 1
+          # The debug build type signs with a custom keystore at the project
+          # root (${rootDir}/debug.keystore). That file is git-ignored and is
+          # not committed, so it must be created in CI with the exact
+          # alias/passwords expected by app/build.gradle.kts.
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Make Gradle wrapper executable
-        run: chmod +x "${{ steps.gradle-project.outputs.dir }}/gradlew"
+        run: chmod +x ./gradlew
 
       - name: Build debug APK
-        working-directory: ${{ steps.gradle-project.outputs.dir }}
-        run: ./gradlew --no-daemon clean assembleDebug
+        # --no-configuration-cache avoids first-run incompatibilities with the
+        # google-services / secrets Gradle plugins that would otherwise fail
+        # the configuration-cache enabled build.
+        run: ./gradlew --no-daemon --stacktrace --no-configuration-cache clean assembleDebug
 
       - name: Locate generated APK
         id: apk
         shell: bash
         run: |
-          APK_PATH="$(find "${{ steps.gradle-project.outputs.dir }}" \
-            -type f -path '*/build/outputs/apk/*/*.apk' \
+          APK_PATH="$(find app/build/outputs/apk -type f -name '*.apk' \
             ! -name '*-androidTest.apk' | head -n 1)"
 
           if [ -z "$APK_PATH" ]; then
@@ -98,4 +92,18 @@ jobs:
           name: Lookmoto-debug-apk
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+
+      - name: Publish APK to GitHub Release (direct download link)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Lookmoto APK build ${{ github.run_number }}
+          body: |
+            Automated debug APK build.
+            Direct download: the Lookmoto-debug.apk asset attached below.
+          files: release/Lookmoto-debug.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
