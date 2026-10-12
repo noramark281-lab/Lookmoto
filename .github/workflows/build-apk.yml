@@ -2,11 +2,9 @@ name: Build Lookmoto APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -29,13 +27,30 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "::error::ANDROID_HOME is not set"
+            exit 1
+          fi
+
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager 2>/dev/null \
+            | sort -V | tail -n 1)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found"
+            exit 1
+          fi
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
 
       - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager --install \
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
@@ -49,8 +64,7 @@ jobs:
           elif [ -f "./android/gradlew" ]; then
             echo "dir=android" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Gradle wrapper not found at ./gradlew or ./android/gradlew"
-            echo "This repository may not contain an Android Gradle project."
+            echo "::error::Gradle wrapper not found"
             exit 1
           fi
 
@@ -61,17 +75,16 @@ jobs:
         working-directory: ${{ steps.gradle-project.outputs.dir }}
         run: ./gradlew --no-daemon clean assembleDebug
 
-      - name: Find generated APK
+      - name: Locate generated APK
         id: apk
         shell: bash
         run: |
           APK_PATH="$(find "${{ steps.gradle-project.outputs.dir }}" \
             -type f -path '*/build/outputs/apk/*/*.apk' \
-            ! -name '*-androidTest.apk' \
-            | head -n 1)"
+            ! -name '*-androidTest.apk' | head -n 1)"
 
           if [ -z "$APK_PATH" ]; then
-            echo "::error::No APK was generated."
+            echo "::error::No APK was generated"
             exit 1
           fi
 
