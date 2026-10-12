@@ -29,16 +29,30 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install required Android SDK packages
+        shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          # Use the SDK preinstalled on the GitHub-hosted runner instead of
+          # android-actions/setup-android: that action re-downloads cmdline
+          # tools and fails on non-interactive license acceptance on this
+          # runner image. The preinstalled sdkmanager handles licenses fine.
+          ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found under $ANDROID_HOME"; exit 1
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+
+          # Accept all licenses non-interactively.
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
+
           # compileSdk is 36 (see app/build.gradle.kts), so android-36 and
           # build-tools 36.0.0 MUST be installed. android-35 is kept for
           # targetSdk tooling compatibility.
-          sdkmanager --install \
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install \
             "platform-tools" \
             "platforms;android-36" \
             "platforms;android-35" \
