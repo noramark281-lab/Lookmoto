@@ -1,0 +1,47 @@
+<resources>
+    <string name="app_name">BTC Signal Pro</string>
+    <string name="btc_usdt">BTC / USDT</string>
+    <string name="real_time_signals">إشارات وتنبؤات رقمية ذكية</string>
+    <string name="app_subtitle">منصة التحليل والتنبؤ اللحظي لزوج بيتكوين</string>
+    
+    <!-- Timeframes -->
+    <string name="timeframe_1m">1 دقيقة</string>
+    <string name="timeframe_5m">5 دقائق</string>
+    <string name="timeframe_10m">10 دقائق</string>
+    <string name="timeframe_15m">15 دقيقة</string>
+    <string name="timeframe_30m">30 دقيقة</string>
+    <string name="timeframe_1h">1 ساعة</string>
+    
+    <!-- Directions & Signals -->
+    <string name="bullish">صعود متوقع (شراء)</string>
+    <string name="bearish">هبوط متوقع (بيع)</string>
+    <string name="neutral">حركة عرضية / محايد</string>
+    <string name="strong_buy">شراء قوي جداً 🚀</string>
+    <string name="buy">شراء صاعد 📈</string>
+    <string name="strong_sell">بيع قوي جداً 💥</string>
+    <string name="sell">بيع هابط 📉</string>
+    <string name="probability_rise">نسبة احتمال الصعود</string>
+    <string name="probability_fall">نسبة احتمال الهبوط</string>
+    
+    <!-- Platforms & Sources -->
+    <string name="binance_source">منصة بينانس (Binance Spot)</string>
+    <string name="mexc_source">منصة إم إي إكس سي (MEXC Spot)</string>
+    <string name="news_sources">مواقع الأخبار والويب العالمية</string>
+    
+    <!-- Tabs & Sections -->
+    <string name="tab_predictions">التنبؤات والتوقعات</string>
+    <string name="tab_chart">الرسم البياني والإشارات</string>
+    <string name="tab_indicators">المؤشرات الفنية</string>
+    <string name="tab_news">الأخبار ونبض السوق</string>
+    <string name="tab_orderbook">دفتر الأوامر والصفقات</string>
+    <string name="tab_risk">إدارة المخاطر والصفقات</string>
+    
+    <!-- Risk & Targets -->
+    <string name="target_price">السعر المستهدف</string>
+    <string name="stop_loss">وقف الخسارة</string>
+    <string name="support_level">مستوى الدعم</string>
+    <string name="resistance_level">مستوى المقاومة</string>
+    <string name="confidence_level">درجة الثقة في التوقع</string>
+    <string name="market_sentiment">مشاعر السوق العامة</string>
+    <string name="fear_and_greed">مؤشر الخوف والطمع</string>
+</resources>

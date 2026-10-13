@@ -1,0 +1,6 @@
+{
+  "name": "BTC Signal Pro",
+  "description": "Real-time BTC/USDT probabilistic technical signals, live Binance and MEXC order book depth, aggregate trades, and multi-timeframe technical indicator engine with automated Risk Management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
