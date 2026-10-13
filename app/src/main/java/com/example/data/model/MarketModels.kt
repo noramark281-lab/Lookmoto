@@ -14,11 +14,13 @@ enum class Timeframe(
     val bybitInterval: String,
     val durationMs: Long
 ) {
+    ONE_MIN("1 دقيقة", "1m", "1m", "1m", "1", 60_000L),
     FIVE_MIN("5 دقائق", "5m", "5m", "5m", "5", 300_000L),
-    TEN_MIN("10 د", "10m", "15m", "15m", "15", 600_000L),
-    THIRTY_MIN("30 د", "30m", "30m", "30m", "30", 1_800_000L),
+    TEN_MIN("10 دقائق", "10m", "15m", "15m", "15", 600_000L),
+    FIFTEEN_MIN("15 دقيقة", "15m", "15m", "15m", "15", 900_000L),
+    THIRTY_MIN("30 دقيقة", "30m", "30m", "30m", "30", 1_800_000L),
     ONE_HOUR("1 ساعة", "1h", "1h", "1h", "60", 3_600_000L),
-    ONE_DAY("يوم", "1d", "1d", "1d", "D", 86_400_000L)
+    ONE_DAY("1 يوم", "1d", "1d", "1d", "D", 86_400_000L)
 }
 
 data class Candle(

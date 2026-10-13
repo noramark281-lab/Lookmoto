@@ -424,8 +424,10 @@ object IndicatorEngine {
 
         val atr = indicators.atr ?: (currentPrice * 0.008)
         val multiplier = when (timeframe) {
+            Timeframe.ONE_MIN -> 0.35
             Timeframe.FIVE_MIN -> 0.75
             Timeframe.TEN_MIN -> 1.1
+            Timeframe.FIFTEEN_MIN -> 1.4
             Timeframe.THIRTY_MIN -> 2.1
             Timeframe.ONE_HOUR -> 3.2
             Timeframe.ONE_DAY -> 5.5

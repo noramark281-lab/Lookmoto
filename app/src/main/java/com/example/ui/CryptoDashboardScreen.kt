@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,7 +95,9 @@ fun CryptoDashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
-    val scrollState = rememberScrollState()
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0
 
     Box(
         modifier = modifier
@@ -101,148 +106,113 @@ fun CryptoDashboardScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            // Top App Bar
-            TopDashboardHeader(
-                activeExchange = state.activeExchange,
-                connectionStatus = state.connectionStatus,
-                onSwitchExchange = { viewModel.switchExchange(it) },
-                onRefresh = { viewModel.refreshData() }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Multi-Exchange Heartbeat & Outage Alert Bar
-            ConnectionHealthBar(heartbeat = state.heartbeat)
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Live Price & 24h Ticker Banner
-            LiveTickerHeader(
-                ticker = state.ticker,
-                tickDirection = state.tickDirection
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Timeframe Selector Chips
-            TimeframeSelectorRow(
-                selectedTimeframe = state.selectedTimeframe,
-                onSelectTimeframe = { viewModel.selectTimeframe(it) }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Scrollable Tabs
-            DashboardTabsRow(
-                selectedTab = state.selectedTab,
-                onSelectTab = { viewModel.selectTab(it) }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (state.isLoading && state.candles.isEmpty()) {
-                Box(
+        if (isLandscape) {
+            // Landscape Mode (الوضع الأفقي): High-density professional dual-pane trading terminal
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Left Control Pane (Ticker, Connection Health, Timeframe Selector)
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                    contentAlignment = Alignment.Center
+                        .weight(0.38f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(color = CryptoCyan)
-                        Text(
-                            text = "جارٍ ربط وتجميع بيانات المنصات العالمية...",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
-                    }
+                    TopDashboardHeader(
+                        activeExchange = state.activeExchange,
+                        connectionStatus = state.connectionStatus,
+                        onSwitchExchange = { viewModel.switchExchange(it) },
+                        onRefresh = { viewModel.refreshData() }
+                    )
+
+                    ConnectionHealthBar(heartbeat = state.heartbeat)
+
+                    LiveTickerHeader(
+                        ticker = state.ticker,
+                        tickDirection = state.tickDirection
+                    )
+
+                    TimeframeSelectorRow(
+                        selectedTimeframe = state.selectedTimeframe,
+                        onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-            } else {
-                when (state.selectedTab) {
-                    DashboardTab.BEST_REPORT -> {
-                        BestReportView(
-                            multiSignals = state.multiTimeframe,
-                            selectedTimeframe = state.selectedTimeframe,
-                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0,
-                            onSelectTimeframe = { viewModel.selectTimeframe(it) }
-                        )
-                    }
 
-                    DashboardTab.PREDICTIONS -> {
-                        PredictionsView(
-                            multiSignals = state.multiTimeframe,
-                            selectedTimeframe = state.selectedTimeframe,
-                            currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0,
-                            onSelectTimeframe = { viewModel.selectTimeframe(it) }
-                        )
-                    }
+                // Right Content Pane (Tabs + Scrollable Tab Views)
+                Column(
+                    modifier = Modifier
+                        .weight(0.62f)
+                        .fillMaxHeight()
+                ) {
+                    DashboardTabsRow(
+                        selectedTab = state.selectedTab,
+                        onSelectTab = { viewModel.selectTab(it) }
+                    )
 
-                    DashboardTab.TRADINGVIEW_GAUGES -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TradingViewGaugeCard(gauge = state.tradingViewGauge)
-                            IndicatorDashboard(
-                                indicators = state.indicators,
-                                currentPrice = state.ticker.price.takeIf { it > 0 } ?: state.candles.lastOrNull()?.close ?: 65000.0
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    DashboardTab.DERIVATIVES_COINGLASS -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            DerivativesFlowCard(derivatives = state.derivativesFlow)
-                            OrderBookAndTradesView(
-                                orderBook = state.orderBook,
-                                recentTrades = state.recentTrades
-                            )
-                        }
-                    }
-
-                    DashboardTab.CHART_SIGNALS -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            HeroSignalBanner(
-                                signal = state.currentSignal,
-                                onOpenBreakdown = { viewModel.toggleSignalBreakdown(true) }
-                            )
-
-                            CandleStickChart(
-                                candles = state.candles,
-                                onCandleSelected = { viewModel.inspectCandle(it) }
-                            )
-                        }
-                    }
-
-                    DashboardTab.NEWS_SENTIMENT -> {
-                        NewsSentimentView(
-                            marketSentiment = state.marketSentiment,
-                            newsFeed = state.newsFeed
-                        )
-                    }
-
-                    DashboardTab.ORDER_BOOK -> {
-                        OrderBookAndTradesView(
-                            orderBook = state.orderBook,
-                            recentTrades = state.recentTrades
-                        )
-                    }
-
-                    DashboardTab.RISK_MATRIX -> {
-                        RiskMatrixCard(
-                            risk = state.currentSignal?.riskManagement,
-                            isBullish = state.currentSignal?.signalType?.isBullish ?: true
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        ActiveTabContent(
+                            state = state,
+                            currentPrice = currentPrice,
+                            viewModel = viewModel
                         )
                     }
                 }
             }
+        } else {
+            // Portrait Mode (الوضع العمودي): Standard mobile stream
+            val scrollState = rememberScrollState()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                TopDashboardHeader(
+                    activeExchange = state.activeExchange,
+                    connectionStatus = state.connectionStatus,
+                    onSwitchExchange = { viewModel.switchExchange(it) },
+                    onRefresh = { viewModel.refreshData() }
+                )
 
-            Spacer(modifier = Modifier.height(30.dp))
+                ConnectionHealthBar(heartbeat = state.heartbeat)
+
+                LiveTickerHeader(
+                    ticker = state.ticker,
+                    tickDirection = state.tickDirection
+                )
+
+                TimeframeSelectorRow(
+                    selectedTimeframe = state.selectedTimeframe,
+                    onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                )
+
+                DashboardTabsRow(
+                    selectedTab = state.selectedTab,
+                    onSelectTab = { viewModel.selectTab(it) }
+                )
+
+                ActiveTabContent(
+                    state = state,
+                    currentPrice = currentPrice,
+                    viewModel = viewModel
+                )
+
+                Spacer(modifier = Modifier.height(30.dp))
+            }
         }
 
         // Algorithmic Signal Breakdown Dialog
@@ -252,6 +222,109 @@ fun CryptoDashboardScreen(
                 multiTimeframe = state.multiTimeframe,
                 onDismiss = { viewModel.toggleSignalBreakdown(false) }
             )
+        }
+    }
+}
+
+@Composable
+private fun ActiveTabContent(
+    state: CryptoUiState,
+    currentPrice: Double,
+    viewModel: CryptoViewModel
+) {
+    if (state.isLoading && state.candles.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CircularProgressIndicator(color = CryptoCyan)
+                Text(
+                    text = "جارٍ ربط وتجميع بيانات المنصات العالمية...",
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+            }
+        }
+    } else {
+        when (state.selectedTab) {
+            DashboardTab.BEST_REPORT -> {
+                BestReportView(
+                    multiSignals = state.multiTimeframe,
+                    selectedTimeframe = state.selectedTimeframe,
+                    currentPrice = currentPrice,
+                    onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                )
+            }
+
+            DashboardTab.PREDICTIONS -> {
+                PredictionsView(
+                    multiSignals = state.multiTimeframe,
+                    selectedTimeframe = state.selectedTimeframe,
+                    currentPrice = currentPrice,
+                    onSelectTimeframe = { viewModel.selectTimeframe(it) }
+                )
+            }
+
+            DashboardTab.TRADINGVIEW_GAUGES -> {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TradingViewGaugeCard(gauge = state.tradingViewGauge)
+                    IndicatorDashboard(
+                        indicators = state.indicators,
+                        currentPrice = currentPrice
+                    )
+                }
+            }
+
+            DashboardTab.DERIVATIVES_COINGLASS -> {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DerivativesFlowCard(derivatives = state.derivativesFlow)
+                    OrderBookAndTradesView(
+                        orderBook = state.orderBook,
+                        recentTrades = state.recentTrades
+                    )
+                }
+            }
+
+            DashboardTab.CHART_SIGNALS -> {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HeroSignalBanner(
+                        signal = state.currentSignal,
+                        onOpenBreakdown = { viewModel.toggleSignalBreakdown(true) }
+                    )
+
+                    CandleStickChart(
+                        candles = state.candles,
+                        onCandleSelected = { viewModel.inspectCandle(it) }
+                    )
+                }
+            }
+
+            DashboardTab.NEWS_SENTIMENT -> {
+                NewsSentimentView(
+                    marketSentiment = state.marketSentiment,
+                    newsFeed = state.newsFeed
+                )
+            }
+
+            DashboardTab.ORDER_BOOK -> {
+                OrderBookAndTradesView(
+                    orderBook = state.orderBook,
+                    recentTrades = state.recentTrades
+                )
+            }
+
+            DashboardTab.RISK_MATRIX -> {
+                RiskMatrixCard(
+                    risk = state.currentSignal?.riskManagement,
+                    isBullish = state.currentSignal?.signalType?.isBullish ?: true
+                )
+            }
         }
     }
 }
@@ -514,7 +587,7 @@ private fun TimeframeSelectorRow(
             ) {
                 Text(
                     text = tf.shortLabel,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = textCol
                 )

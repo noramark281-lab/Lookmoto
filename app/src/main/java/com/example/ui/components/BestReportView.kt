@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Verified
@@ -29,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,8 +46,11 @@ import com.example.ui.theme.CryptoCardBorder
 import com.example.ui.theme.CryptoCardDark
 import com.example.ui.theme.CryptoCyan
 import com.example.ui.theme.CryptoGreen
+import com.example.ui.theme.CryptoGreenGlow
 import com.example.ui.theme.CryptoOrange
 import com.example.ui.theme.CryptoRed
+import com.example.ui.theme.CryptoRedGlow
+import com.example.ui.theme.CryptoYellow
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
@@ -62,26 +70,281 @@ fun BestReportView(
         modifier = modifier
             .fillMaxWidth()
             .testTag("best_report_view"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Consolidated Matrix for all 5 timeframes: 5m, 10m, 30m, 1h, 1d
+        // 1. Featured Selected Instant Flash Report Card
+        if (selectedReport != null) {
+            SelectedFlashReportCard(
+                report = selectedReport,
+                currentPrice = currentPrice
+            )
+        }
+
+        // 2. Comprehensive Instant Trend Matrix for all timeframes
         AllTimeframesInstantMatrix(
             multiSignals = multiSignals,
             selectedTimeframe = selectedTimeframe,
             onSelectTimeframe = onSelectTimeframe
         )
 
-        // Compact details strip for the selected timeframe
-        if (selectedReport != null) {
-            SelectedTimeframeCompactStrip(
-                report = selectedReport,
-                currentPrice = currentPrice
-            )
-        }
-
-        // Institutional Consensus Attribution Card
+        // 3. Global Platforms & Institutional Consensus Card
         if (selectedReport != null) {
             InstitutionalConsensusCard(report = selectedReport)
+        }
+    }
+}
+
+@Composable
+private fun SelectedFlashReportCard(
+    report: InstantFlashReport,
+    currentPrice: Double
+) {
+    val isBullish = report.isBullish
+    val primaryColor = if (isBullish) CryptoGreen else CryptoRed
+    val glowColor = if (isBullish) CryptoGreenGlow else CryptoRedGlow
+    val priceDiff = kotlin.math.abs(report.targetPrice - currentPrice)
+    val priceDiffPercent = if (currentPrice > 0) (priceDiff / currentPrice) * 100 else 0.0
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(listOf(primaryColor, glowColor.copy(alpha = 0.4f))),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .testTag("selected_flash_report_card"),
+        colors = CardDefaults.cardColors(containerColor = CryptoCardDark),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header: Timeframe title and consensus accuracy
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "التقرير اللحظي المختار (${report.timeframe.labelArabic})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(primaryColor.copy(alpha = 0.16f))
+                        .border(1.dp, primaryColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "دقة ${report.probabilityAccuracy}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            color = primaryColor
+                        )
+                    }
+                }
+            }
+
+            // Direction Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(primaryColor.copy(alpha = 0.12f))
+                    .border(1.dp, primaryColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(primaryColor.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isBullish) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                contentDescription = null,
+                                tint = primaryColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = if (isBullish) "ارتفاع البيتكوين (Bullish) 📈" else "هبوط البيتكوين (Bearish) 📉",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = primaryColor
+                            )
+                            Text(
+                                text = if (isBullish) "انخفاض قوة USDT لصالح صعود البيتكوين" else "ارتفاع قوة USDT وتراجع سعر البيتكوين",
+                                fontSize = 10.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = if (isBullish) "+${String.format("%,.1f", priceDiff)} $" else "-${String.format("%,.1f", priceDiff)} $",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor
+                        )
+                        Text(
+                            text = String.format("%.2f%% المتوقع", priceDiffPercent),
+                            fontSize = 9.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            }
+
+            // Key Metrics Grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Target Price Card
+                MetricBox(
+                    title = "السعر المستهدف",
+                    value = "$${formatPrice(report.targetPrice)}",
+                    accentColor = primaryColor,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Stop Loss Card
+                MetricBox(
+                    title = "وقف الخسارة",
+                    value = "$${formatPrice(report.stopLoss)}",
+                    accentColor = CryptoOrange,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Risk:Reward Card
+                MetricBox(
+                    title = "العائد للمخاطرة",
+                    value = "1 : 2.5",
+                    accentColor = CryptoCyan,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Time Horizon Card
+                MetricBox(
+                    title = "المدى الزمني",
+                    value = report.timeframe.shortLabel,
+                    accentColor = CryptoYellow,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Consensus and Action Advice
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(CryptoBgDark)
+                    .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = CryptoCyan,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "توصية التحرك اللحظي:",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CryptoCyan
+                        )
+                    }
+                    Text(
+                        text = if (isBullish) {
+                            "شراء مع تأكيد الزخم الصاعد وتصفية عقود البيع، وجني أرباح عند مستويات $${formatPrice(report.targetPrice)}"
+                        } else {
+                            "بيع وتأمين الأرباح تحسباً لضغط السيولة وكسر مستويات الدعم حتى $${formatPrice(report.targetPrice)}"
+                        },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricBox(
+    title: String,
+    value: String,
+    accentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(CryptoBgDark)
+            .border(1.dp, CryptoCardBorder, RoundedCornerShape(8.dp))
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                fontSize = 9.sp,
+                color = TextMuted
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                color = accentColor
+            )
         }
     }
 }
@@ -111,13 +374,13 @@ private fun AllTimeframesInstantMatrix(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bolt,
+                        imageVector = Icons.Default.ShowChart,
                         contentDescription = null,
                         tint = CryptoCyan,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "تقرير الاتجاه اللحظي لكل إطار زمني",
+                        text = "مصفوفة الاتجاه اللحظي لجميع الأطر الزمنية",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -214,72 +477,6 @@ private fun AllTimeframesInstantMatrix(
 }
 
 @Composable
-private fun SelectedTimeframeCompactStrip(
-    report: InstantFlashReport,
-    currentPrice: Double
-) {
-    val isBullish = report.isBullish
-    val primaryColor = if (isBullish) CryptoGreen else CryptoRed
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, primaryColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-            .testTag("selected_timeframe_strip"),
-        colors = CardDefaults.cardColors(containerColor = CryptoCardDark),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("الإطار المختار", fontSize = 9.sp, color = TextMuted)
-                Text(
-                    text = report.timeframe.labelArabic,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CryptoCyan
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("السعر المستهدف", fontSize = 9.sp, color = TextMuted)
-                Text(
-                    text = "$${formatPrice(report.targetPrice)}",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = primaryColor
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("وقف الخسارة", fontSize = 9.sp, color = TextMuted)
-                Text(
-                    text = "$${formatPrice(report.stopLoss)}",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CryptoOrange
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("دقة التوافق", fontSize = 9.sp, color = TextMuted)
-                Text(
-                    text = "${report.probabilityAccuracy}%",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    color = primaryColor
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun InstitutionalConsensusCard(report: InstantFlashReport) {
     Card(
         modifier = Modifier
@@ -288,7 +485,10 @@ private fun InstitutionalConsensusCard(report: InstantFlashReport) {
         colors = CardDefaults.cardColors(containerColor = CryptoCardDark),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -300,29 +500,75 @@ private fun InstitutionalConsensusCard(report: InstantFlashReport) {
                     modifier = Modifier.size(15.dp)
                 )
                 Text(
-                    text = "توافق المنصات العالمية ومصادر التقرير",
+                    text = "توافق المنصات العالمية ومصادر التقرير اللحظي",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            // Institutional Sources Breakdown
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                SourceBadge(title = "Tree News", subtitle = "عواجل لحظية", color = CryptoCyan, modifier = Modifier.weight(1f))
+                SourceBadge(title = "TradingView", subtitle = "مؤشرات فنية", color = CryptoGreen, modifier = Modifier.weight(1f))
+                SourceBadge(title = "CoinGlass", subtitle = "مشتقات وسيولة", color = CryptoOrange, modifier = Modifier.weight(1f))
+                SourceBadge(title = "Binance/Bybit", subtitle = "عمق الأوامر", color = CryptoYellow, modifier = Modifier.weight(1f))
+            }
 
-            Text(
-                text = report.primarySourceConsensusArabic,
-                fontSize = 11.sp,
-                color = CryptoCyan,
-                lineHeight = 15.sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(CryptoBgDark)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = report.primarySourceConsensusArabic,
+                    fontSize = 11.sp,
+                    color = CryptoCyan,
+                    lineHeight = 15.sp
+                )
+            }
 
             Text(
                 text = report.institutionalInsightArabic,
                 fontSize = 10.sp,
                 color = TextSecondary,
                 lineHeight = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceBadge(
+    title: String,
+    subtitle: String,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(CryptoBgDark)
+            .border(1.dp, CryptoCardBorder, RoundedCornerShape(6.dp))
+            .padding(horizontal = 4.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Text(
+                text = subtitle,
+                fontSize = 8.sp,
+                color = TextMuted
             )
         }
     }

@@ -268,18 +268,22 @@ class CryptoRepository(
         val tvGauge = IndicatorEngine.calculateTradingViewGauge(currentPrice, currentTfIndicators)
 
         // Weighted consensus
+        val score1m = newSignals[Timeframe.ONE_MIN]?.probabilityBullish ?: 50
         val score5m = newSignals[Timeframe.FIVE_MIN]?.probabilityBullish ?: 50
         val score10m = newSignals[Timeframe.TEN_MIN]?.probabilityBullish ?: 50
+        val score15m = newSignals[Timeframe.FIFTEEN_MIN]?.probabilityBullish ?: 50
         val score30m = newSignals[Timeframe.THIRTY_MIN]?.probabilityBullish ?: 50
         val score1h = newSignals[Timeframe.ONE_HOUR]?.probabilityBullish ?: 50
         val score1d = newSignals[Timeframe.ONE_DAY]?.probabilityBullish ?: 50
 
         val weightedBullish = (
-            (score5m * 0.25) +
-            (score10m * 0.25) +
-            (score30m * 0.25) +
-            (score1h * 0.15) +
-            (score1d * 0.10)
+            (score1m * 0.10) +
+            (score5m * 0.20) +
+            (score10m * 0.15) +
+            (score15m * 0.15) +
+            (score30m * 0.20) +
+            (score1h * 0.12) +
+            (score1d * 0.08)
         ).roundToInt()
 
         val overallSignal = when {
